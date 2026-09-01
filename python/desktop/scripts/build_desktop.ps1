@@ -275,6 +275,25 @@ function Invoke-BootProbe([string]$ExePath, [string]$ProbeRoot, [string]$Label) 
   if (-not $wv) { throw "no webview2 renderer under probe data dir (bad WEBVIEW2_USER_DATA_FOLDER?)" }
   Write-Host "  webview2 renderers: $($wv.Count)"
 
+  # The splash window appears BEFORE the backend finishes booting, so wait for
+  # the boot URL in shell.log before closing — the point of this probe (the
+  # backend boots standalone) and the shell.log assertion below both need it.
+  # Stopping the app early would kill the backend mid-boot and no URL line
+  # would ever be written.
+  $log = Join-Path $data 'shell.log'
+  $booted = $false
+  $urlDeadline = (Get-Date).AddSeconds(90)
+  while ((Get-Date) -lt $urlDeadline) {
+    $logText = Get-Content $log -Raw -ErrorAction SilentlyContinue
+    if ($logText -match 'backend URL: http://') { $booted = $true; break }
+    Start-Sleep -Milliseconds 500
+  }
+  if (-not $booted) {
+    Write-Host "  SHELL.LOG:`n$(Get-Content $log -Raw -ErrorAction SilentlyContinue)"
+    throw 'backend did not report a URL before the probe timeout'
+  }
+  Write-Host '  backend reported its URL'
+
   [void][DeskWin32Probe]::PostMessageW($hwnd, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero)  # WM_CLOSE
   $exited = $p.WaitForExit(25000)
   if (-not $exited) { $p.Kill(); throw 'EXE did not exit after WM_CLOSE' }

@@ -13,7 +13,9 @@ Performance design (deliberate, no bridge):
 
 from __future__ import annotations
 
+import base64
 import ctypes
+import html as html_mod
 import os
 from pathlib import Path
 
@@ -27,7 +29,9 @@ from .log import log
 APP_NAME = "DeepSeek Harness"
 _WINDOW = (1280, 800)
 _MIN_WINDOW = (960, 600)
-_BOOT_TIMEOUT = 30.0
+_BOOT_TIMEOUT = 60.0  # cold start measured ~20 s frozen, ~30-50 s on a fresh
+                      # data dir / slow disk; the splash keeps spinning, and a
+                      # LATE boot still self-heals via rebind (on_url)
 
 
 def _prepare_webview2_data_dir() -> None:
@@ -90,35 +94,113 @@ def _set_window_titlebar_icon(icon: Path) -> None:
     user32.SendMessageW(hwnd, WM_SETICON, ICON_SMALL, hicon)
 
 
+# ---- loading splash -------------------------------------------------------
+# The window used to appear only AFTER the backend reported its URL, so a cold
+# start (~20 s: PyInstaller unpack + node boot) showed nothing and looked dead.
+# Instead the window opens immediately on a local splash — the sleeping-whale
+# app icon, still, with "z z z" drifting up and fading in a loop — while the
+# node backend boots in parallel; the view then load_url()s to the real UI.
+
+_SPLASH_TMPL = """<!doctype html>
+<html lang="zh">
+<head><meta charset="utf-8"><title>DeepSeek Harness</title>
+<style>
+  html,body{height:100%;margin:0}
+  body{display:flex;flex-direction:column;align-items:center;justify-content:center;
+       background:#10141c;color:#a9b4c8;font-family:"Segoe UI",system-ui,sans-serif;
+       -webkit-user-select:none;user-select:none;overflow:hidden}
+  .stage{position:relative;width:230px;height:210px}
+  .whale{position:absolute;left:0;top:18px;width:170px;height:170px;object-fit:contain}
+  .z{position:absolute;font-weight:700;color:#8fb7ff;opacity:0;line-height:1;
+     animation:zfloat 2.4s ease-out infinite}
+  /* the whale artwork itself no longer carries the old static zZ — the only
+     z's live here, drifting straight up from just above the whale's head */
+  .z1{left:58px;top:30px;font-size:24px}
+  .z2{left:84px;top:16px;font-size:32px;animation-delay:.8s}
+  .z3{left:110px;top:0;font-size:40px;animation-delay:1.6s}
+  @keyframes zfloat{
+    0%{transform:translate(-6px,14px) scale(.55);opacity:0}
+    25%{opacity:.95}
+    100%{transform:translate(10px,-38px) scale(1.15);opacity:0}
+  }
+  .status{position:fixed;left:0;right:0;bottom:9%;text-align:center;
+          font-size:14px;letter-spacing:.14em}
+</style></head>
+<body>
+  <div class="stage">
+    <img class="whale" src="_ICON_URI_" alt="">
+    <span class="z z1">z</span><span class="z z2">z</span><span class="z z3">z</span>
+  </div>
+  <div class="status">正在启动 &middot; starting&hellip;</div>
+</body></html>
+"""
+
+_ERROR_TMPL = """<!doctype html>
+<html lang="zh">
+<head><meta charset="utf-8"><title>DeepSeek Harness</title>
+<style>
+  html,body{height:100%;margin:0}
+  body{display:flex;align-items:center;justify-content:center;
+       background:#10141c;color:#c8d2e4;font-family:"Segoe UI",system-ui,sans-serif}
+  .card{max-width:640px;padding:32px 40px;border:1px solid #2a3448;border-radius:12px;
+        background:#161c28}
+  h1{font-size:19px;margin:0 0 12px;color:#f0b37e}
+  pre{white-space:pre-wrap;word-break:break-word;font-size:12px;color:#93a0b8;
+      background:#0d1119;border-radius:8px;padding:12px 14px;max-height:220px;overflow:auto}
+</style></head>
+<body><div class="card">
+  <h1>后端启动失败 &middot; backend failed to start</h1>
+  <pre>_DETAIL_</pre>
+</div></body></html>
+"""
+
+
+def _icon_data_uri() -> str:
+    """The app icon as a data URI, so the splash needs no extra data files."""
+    try:
+        icon = config.app_icon()
+        mime = "image/png" if icon.suffix.lower() == ".png" else "image/x-icon"
+        data = base64.b64encode(icon.read_bytes()).decode("ascii")
+        return f"data:{mime};base64,{data}"
+    except Exception:  # noqa: BLE001 — splash must survive even a missing icon
+        return "about:blank"
+
+
+def _splash_html() -> str:
+    return _SPLASH_TMPL.replace("_ICON_URI_", _icon_data_uri())
+
+
+def _boot_error_html(detail: str) -> str:
+    return _ERROR_TMPL.replace("_DETAIL_", html_mod.escape(detail or "unknown error"))
+
+
 def run() -> int:
     _prepare_webview2_data_dir()
     _hold_mutex()
 
     supervisor = BackendSupervisor()
     failures: list[str] = []
+    boot_error: list[str] = []  # set when the backend never reported a URL
 
     def on_failed(code: int, tail: str) -> None:
         failures.append(f"backend exited with code {code}\n{tail}")
 
     supervisor.on_failed = on_failed
 
+    # Spawn node FIRST — it boots while Python imports webview and the splash
+    # window comes up, so the splash adds no latency over the old flow (which
+    # blocked on wait_for_url BEFORE any window existed).
     try:
         supervisor.start()
     except Exception as exc:  # missing node / CLI not built
         log(f"==> failed to start backend: {exc}")
-        return 1
+        boot_error.append(f"failed to start the backend:\n{exc}")
 
     log("==> starting backend ...")
-    url = supervisor.wait_for_url(_BOOT_TIMEOUT)
-    if url is None:
-        log("==> backend did not report a URL within the timeout")
-        supervisor.stop()
-        return 1
-    log(f"==> backend URL: {url}")
 
     window = webview.create_window(
         APP_NAME,
-        url,
+        html=_splash_html(),
         width=_WINDOW[0],
         height=_WINDOW[1],
         min_size=_MIN_WINDOW,
@@ -196,9 +278,40 @@ def run() -> int:
     if tray is not None:
         window.events.closing += _on_closing
 
+    def _boot() -> None:
+        """webview.start(func) callback: once the UI thread is up, wait for the
+        backend's token URL and swap the splash for the real UI — or show a
+        bilingual error card if it never reports. A LATE boot still recovers:
+        on_url/rebind points the view at the fresh URL whenever it arrives."""
+        if boot_error:
+            try:
+                window.load_html(_boot_error_html(boot_error[0]))
+            except Exception:  # noqa: BLE001 — window may already be closing
+                pass
+            return
+        url = supervisor.wait_for_url(_BOOT_TIMEOUT)
+        if url is None:
+            message = (
+                "the backend did not report a URL in time — is another copy"
+                " still running, or did the bundled node fail to boot?\n\n"
+                + supervisor.stderr_tail_text
+            )
+            boot_error.append(message)
+            log("==> backend did not report a URL within the timeout")
+            try:
+                window.load_html(_boot_error_html(message))
+            except Exception:  # noqa: BLE001
+                pass
+            return
+        log(f"==> backend URL: {url}")
+        try:
+            window.load_url(url)
+        except Exception as exc:  # noqa: BLE001 — window may already be closing
+            log(f"==> load_url failed: {exc}")
+
     try:
         # debug=False is the production WebView2 path (GPU + optimized rendering).
-        webview.start(debug=False)
+        webview.start(_boot, debug=False)
     except Exception as exc:  # noqa: BLE001
         log(f"==> webview start failed: {exc}")
         supervisor.stop()
@@ -211,4 +324,9 @@ def run() -> int:
         for line in failures:
             log(line)
         return 2
+    if boot_error:
+        log("==> boot failure:")
+        for line in boot_error:
+            log(line)
+        return 1
     return 0

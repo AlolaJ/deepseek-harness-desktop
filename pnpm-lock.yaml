@@ -10323,6 +10323,9 @@ importers:
       '@deepseek-ai/dsh-atomic-write':
         specifier: workspace:^
         version: link:../../../packages/util/atomic-write
+      '@deepseek-ai/dsh-attachment':
+        specifier: workspace:^
+        version: link:../../../packages/attachment/attachment
       '@deepseek-ai/dsh-authorization':
         specifier: workspace:^
         version: link:../../../packages/credentials/authorization
@@ -10338,9 +10341,15 @@ importers:
       '@deepseek-ai/dsh-fs':
         specifier: workspace:^
         version: link:../../../packages/fs/fs
+      '@deepseek-ai/dsh-hook-protocol':
+        specifier: workspace:^
+        version: link:../../../packages/hooks/hook-protocol
       '@deepseek-ai/dsh-invariants':
         specifier: workspace:^
         version: link:../../../packages/runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-jobs':
+        specifier: workspace:^
+        version: link:../../../packages/jobs/jobs
       '@deepseek-ai/dsh-output-retention':
         specifier: workspace:^
         version: link:../../../packages/util/output-retention
@@ -10350,12 +10359,24 @@ importers:
       '@deepseek-ai/dsh-scope':
         specifier: workspace:^
         version: link:../../../packages/core/scope
+      '@deepseek-ai/dsh-sdk-protocol':
+        specifier: workspace:^
+        version: link:../../../packages/sdk/protocol
+      '@deepseek-ai/dsh-session-persistence':
+        specifier: workspace:^
+        version: link:../../../packages/session/session-persistence
+      '@deepseek-ai/dsh-session-query':
+        specifier: workspace:^
+        version: link:../../../packages/session-query/session-query
       '@deepseek-ai/dsh-session-telemetry':
         specifier: workspace:^
         version: link:../../../packages/session/session-telemetry
       '@deepseek-ai/dsh-session-title-llm':
         specifier: workspace:^
         version: link:../../../packages/session/session-title-llm
+      '@deepseek-ai/dsh-settings':
+        specifier: workspace:^
+        version: link:../../../packages/settings/settings
       '@deepseek-ai/dsh-shell':
         specifier: workspace:^
         version: link:../../../packages/shell/shell
@@ -10368,6 +10389,12 @@ importers:
       '@deepseek-ai/dsh-timeout':
         specifier: workspace:^
         version: link:../../../packages/util/timeout
+      '@deepseek-ai/dsh-util-time':
+        specifier: workspace:^
+        version: link:../../../packages/util/time
+      '@deepseek-ai/dsh-util-workspace-path':
+        specifier: workspace:^
+        version: link:../../../packages/util/workspace-path
       '@deepseek-ai/dsh-workflow':
         specifier: workspace:^
         version: link:../../../packages/workflow/workflow
@@ -13828,7 +13855,7 @@ packages:
     hasBin: true
 
   basic-auth@2.0.1:
-    resolution: {integrity: sha512-NF+epuEdnUYVlGuhaxbbq+dvJttwLnGY+YixlXlME5KpQ5W3CnXA5cVTneY3SPbPDRkcjMbifrwmFYcClgOZeg==}
+    resolution: {integrity: sha1-uZgnm/R844NEtPPPkW1Gebv1Hjo=, tarball: https://depend.iflytek.com/artifactory/api/npm/npm-repo/basic-auth/basic-auth-2.0.1.tgz}
     engines: {node: '>= 0.8'}
 
   bidi-js@1.0.3:
@@ -13965,7 +13992,7 @@ packages:
     resolution: {integrity: sha512-4hm4VPpIecmlg59CHXnRDnqGplJFrbLG4aFEl5vl6cK1u76ws3LLvX7ikFnTDl5vo39sjWD6AaDPYodJp/NNHg==}
 
   compressible@2.0.18:
-    resolution: {integrity: sha512-AF3r7P5dWxL8MxyITRMlORQNaOA2IkAFaTr4k7BUumjPtRpGDTZpl0Pb1XCO6JeDCBdp126Cgs9sMxqSjgYyRg==}
+    resolution: {integrity: sha1-r1PMprBw1MPAdQ+9dyhqbXzEb7o=, tarball: https://depend.iflytek.com/artifactory/api/npm/npm-repo/compressible/compressible-2.0.18.tgz}
     engines: {node: '>= 0.6'}
 
   compression@1.8.1:
@@ -14007,7 +14034,7 @@ packages:
     engines: {node: '>= 0.10'}
 
   corser@2.0.1:
-    resolution: {integrity: sha512-utCYNzRSQIZNPIcGZdQc92UVJYAhtGAteCFg0yRaFm8f0P+CPtyGyHXJcGXnffjCybUCEx3FQ2G7U3/o9eIkVQ==}
+    resolution: {integrity: sha1-jtolLsqrWEDc2XXOuQ2TcMgZ/4c=, tarball: https://depend.iflytek.com/artifactory/api/npm/npm-repo/corser/corser-2.0.1.tgz}
     engines: {node: '>= 0.4.0'}
 
   cose-base@1.0.3:
@@ -14195,7 +14222,7 @@ packages:
     resolution: {integrity: sha512-98IT+HOahAisibz/yjKbzuOBwYcjJ7BCLPzARyHiyEBmRz4fatF+KPJszEHXsGYjUG234aH/cOjW1wwTbKUZlA==}
 
   debug@2.6.9:
-    resolution: {integrity: sha512-bC7ElrdJaJnPbAP+1EotYvqZsb3ecl5wi6Bfi6BJTUcNowp6cvspg0jXznRTKDjm/E7AdgFBVeAPVMNcKGsHMA==}
+    resolution: {integrity: sha1-XRKFFd8TT/Mn6QpMk/Tgd6U2NB8=, tarball: https://depend.iflytek.com/artifactory/api/npm/npm-repo/debug/debug-2.6.9.tgz}
     peerDependencies:
       supports-color: '*'
     peerDependenciesMeta:
@@ -14442,10 +14469,10 @@ packages:
     engines: {node: '>=6'}
 
   eventemitter3@4.0.7:
-    resolution: {integrity: sha512-8guHBZCwKnFhYdHr2ysuRWErTwhoN2X8XELRlrRwpmfeY2jjuUN4taQMsULKUVo1K4DvZl+0pgfyoysHxvmvEw==}
+    resolution: {integrity: sha1-Lem2j2Uo1WRO9cWVJqG0oHMGFp8=, tarball: https://depend.iflytek.com/artifactory/api/npm/npm-repo/eventemitter3/eventemitter3-4.0.7.tgz}
 
   events@3.3.0:
-    resolution: {integrity: sha512-mQw+2fkQbALzQ7V0MY0IqdnXNOeTtP4r0lN9z7AAawCXgqea7bDii20AYrIBrFd/Hx0M2Ocz6S111CaFkUcb0Q==}
+    resolution: {integrity: sha1-Mala0Kkk4tLEGagTrrLE6HjqdAA=, tarball: https://depend.iflytek.com/artifactory/api/npm/npm-repo/events/events-3.3.0.tgz}
     engines: {node: '>=0.8.x'}
 
   eventsource-parser@3.1.0:
@@ -14671,7 +14698,7 @@ packages:
     resolution: {integrity: sha512-88JUN06ipLwsnv+dVn+OIYOvAuvBMy/Qoi6O7mQHxdPXpjy+Cd6xRkWwux7DKO+4sYILtLBRIKgsdpS2gQc7qw==}
 
   he@1.2.0:
-    resolution: {integrity: sha512-F/1DnUGPopORZi0ni+CvrCgHQ5FyEAHRLSApuYWMmrbSwoN2Mn/7k+Gl38gJnR7yyDZk6WLXwiGod1JOWNDKGw==}
+    resolution: {integrity: sha1-hK5l+n6vsWX922FWauFLrwVmTw8=, tarball: https://depend.iflytek.com/artifactory/api/npm/npm-repo/he/he-1.2.0.tgz}
     hasBin: true
 
   hono@4.12.29:
@@ -14707,7 +14734,7 @@ packages:
     engines: {node: '>= 14'}
 
   http-proxy@1.18.1:
-    resolution: {integrity: sha512-7mz/721AbnJwIVbnaSv1Cz3Am0ZLT/UBwkC92VlxhXv/k/BBQfM2fXElQNC27BVGr0uwUpplYPQM9LnaBMR5NQ==}
+    resolution: {integrity: sha1-QBVB8FNIhLv5UmAzTnL4juOXZUk=, tarball: https://depend.iflytek.com/artifactory/api/npm/npm-repo/http-proxy/http-proxy-1.18.1.tgz}
     engines: {node: '>=8.0.0'}
 
   http-server@14.1.1:
@@ -14732,7 +14759,7 @@ packages:
     engines: {node: '>=0.10.0'}
 
   ieee754@1.2.1:
-    resolution: {integrity: sha512-dcyqhDvX1C46lXZcVqCpK+FtMRQVdIMN6/Df5js2zouUsqG7I6sFxitIC+7KYK29KdXOLHdu9zL4sFnoVQnqaA==}
+    resolution: {integrity: sha1-jrehCmP/8l0VpXsAFYbRd9Gw01I=, tarball: https://depend.iflytek.com/artifactory/api/npm/npm-repo/ieee754/ieee754-1.2.1.tgz}
 
   ignore@5.3.2:
     resolution: {integrity: sha512-hsBTNUqQTDwkWtcdYI2i06Y/nUBEsNEDJKjWdigLvegy8kDuJAS8uRlpkkcQpyEXL0Z/pjDy5HBmMjRCJ2gq+g==}
@@ -15337,7 +15364,7 @@ packages:
     engines: {node: '>=18'}
 
   mime@1.6.0:
-    resolution: {integrity: sha512-x0Vn8spI+wuJ1O6S7gnbaQg8Pxh4NNHb7KSINmEWKiPE4RKOplvijn+NkmYmmRgP68mc70j2EbeTFRsrswaQeg==}
+    resolution: {integrity: sha1-Ms2eXGRVO9WNGaVor0Uqz/BJgbE=, tarball: https://depend.iflytek.com/artifactory/api/npm/npm-repo/mime/mime-1.6.0.tgz}
     engines: {node: '>=4'}
     hasBin: true
 
@@ -15371,7 +15398,7 @@ packages:
     engines: {node: '>=4'}
 
   ms@2.0.0:
-    resolution: {integrity: sha512-Tpp60P6IUJDTuOq/5Z8cdskzJujfwqfOTkrwIwj7IRISpnkJnT6SyJ4PCPnGMoFjC9ddhal5KVIYtAt97ix05A==}
+    resolution: {integrity: sha1-VgiurfwAvmwpAd9fmGF4jeDVl8g=, tarball: https://depend.iflytek.com/artifactory/api/npm/npm-repo/ms/ms-2.0.0.tgz}
 
   ms@2.1.3:
     resolution: {integrity: sha1-V0yBOM4dK1hh8LRFedut1gxmFbI=, tarball: https://depend.iflytek.com/artifactory/api/npm/npm-repo/ms/ms-2.1.3.tgz}
@@ -15524,7 +15551,7 @@ packages:
     resolution: {integrity: sha512-opyTPaunsklCBpTK8JGef6mfPhLSnyy5a0IN9vKtx3+4aExf+KxEqYwIy3hqkedXIB97u357uLMJsOnm3GVjsw==}
 
   opener@1.5.2:
-    resolution: {integrity: sha512-ur5UIdyw5Y7yEj9wLzhqXiy6GZ3Mwx0yGI+5sMn2r0N0v3cKJvUmFH5yPP+WXh9e0xfyzyJX95D8l088DNFj7A==}
+    resolution: {integrity: sha1-XTfh81B3udysQwE3InGv3rKhNZg=, tarball: https://depend.iflytek.com/artifactory/api/npm/npm-repo/opener/opener-1.5.2.tgz}
     hasBin: true
 
   optionator@0.9.4:
@@ -15688,7 +15715,7 @@ packages:
     resolution: {integrity: sha1-eCDZsWEgzFXKmud5JoCufbptf+I=, tarball: https://depend.iflytek.com/artifactory/api/npm/npm-repo/process-nextick-args/process-nextick-args-2.0.1.tgz}
 
   process@0.11.10:
-    resolution: {integrity: sha512-cdGef/drWFoydD1JsMzuFf8100nZl+GT+yacc2bEced5f9Rjk4z+WtFUTBu9PhOi9j/jfmBPu0mMEY4wIdAF8A==}
+    resolution: {integrity: sha1-czIwDoQBYb2j5podHZGn1LwW8YI=, tarball: https://depend.iflytek.com/artifactory/api/npm/npm-repo/process/process-0.11.10.tgz}
     engines: {node: '>= 0.6.0'}
 
   property-information@7.2.0:
@@ -15782,7 +15809,7 @@ packages:
     engines: {node: '>=0.10.0'}
 
   requires-port@1.0.0:
-    resolution: {integrity: sha512-KigOCHcocU3XODJxsu8i/j8T9tzT4adHiecwORRQ0ZZFcp7ahwXuRU1m+yuO90C5ZUyGeGfocHDI14M3L3yDAQ==}
+    resolution: {integrity: sha1-kl0mAdOaxIXgkc8NpcbmlNw9yv8=, tarball: https://depend.iflytek.com/artifactory/api/npm/npm-repo/requires-port/requires-port-1.0.0.tgz}
 
   resolve-pkg-maps@1.0.0:
     resolution: {integrity: sha512-seS2Tj26TBVOC2NIc2rOe2y2ZO7efxITtLZcGSOnHHNOQ7CkiUBfw0Iw2ck6xkIhPwLhKNLS8BO+hEpngQlqzw==}
@@ -15877,7 +15904,7 @@ packages:
     resolution: {integrity: sha512-RQPdCYTa8A68uM2jwxoY842xDhvx3E5LFL1LxvxCNMev4o5mLuokczhzjAgGwUZBAmOKZknArSxLKmXtIi2AxQ==}
 
   secure-compare@3.0.1:
-    resolution: {integrity: sha512-AckIIV90rPDcBcglUwXPF3kg0P0qmPsPXAj6BBEENQE1p5yA1xfmDJzfi1Tappj37Pv2mVbKpL3Z1T+Nn7k1Qw==}
+    resolution: {integrity: sha1-8aAymzCLIh+uN7mXTz1XjQypmeM=, tarball: https://depend.iflytek.com/artifactory/api/npm/npm-repo/secure-compare/secure-compare-3.0.1.tgz}
 
   semver@6.3.1:
     resolution: {integrity: sha512-BR7VvDCVHO+q2xBEWskxS6DJE1qRnb7DxzUrogb71CWoSficBxYsiAGd+Kl0mmq/MprG9yArRkyrQxTO6XjMzA==}
@@ -16000,7 +16027,7 @@ packages:
     resolution: {integrity: sha1-nPFhG6YmhdcDCunkujQUnDrwP8g=, tarball: https://depend.iflytek.com/artifactory/api/npm/npm-repo/string_decoder/string_decoder-1.1.1.tgz}
 
   string_decoder@1.3.0:
-    resolution: {integrity: sha512-hkRX8U1WjJFd8LsDJ2yQ/wWWxaopEsABU1XfkM8A+j0+85JAGppt16cr1Whg6KIbb4okU6Mql6BOj+uup/wKeA==}
+    resolution: {integrity: sha1-QvEUWUpGzxqOMLCoT1bHjD7awh4=, tarball: https://depend.iflytek.com/artifactory/api/npm/npm-repo/string_decoder/string_decoder-1.3.0.tgz}
 
   stringify-entities@4.0.4:
     resolution: {integrity: sha512-IwfBptatlO+QCJUo19AqvrPNqlVMpW9YEL2LIVY+Rpv2qsjCGxaDLNRgeGsQWJhfItebuJhsGSLjaBbNSQ+ieg==}
@@ -16202,7 +16229,7 @@ packages:
     engines: {node: '>=18'}
 
   union@0.5.0:
-    resolution: {integrity: sha512-N6uOhuW6zO95P3Mel2I2zMsbsanvvtgn6jVqJv4vbVcz/JN0OkL9suomjQGmWtxJQXOCqUJvquc1sMeNz/IwlA==}
+    resolution: {integrity: sha1-ssEb6E9gU4U3uEbtuboma6AJAHU=, tarball: https://depend.iflytek.com/artifactory/api/npm/npm-repo/union/union-0.5.0.tgz}
     engines: {node: '>= 0.8.0'}
 
   unist-util-is@6.0.1:

@@ -23,7 +23,13 @@ import time
 
 from . import config
 
-_URL_RE = re.compile(r"http://127\.0\.0\.1:\d+")
+# The URL line is `dsh web: http://127.0.0.1:<port>/?token=<launch-token> (LAN: ...)`.
+# The launch token is REQUIRED since the 0.1.2 browser-auth flow (token mints
+# an authority-bound cookie, then 303 -> clean `/`); a bare-origin URL gets
+# 401 "dsh web authentication required", so the match must carry the query.
+# `\S*` stops at the space before "(LAN: ...)" — the LAN URL is a different
+# host (not 127.0.0.1) and can never match.
+_URL_RE = re.compile(r"http://127\.0\.0\.1:\d+\S*")
 
 _CREATE_NO_WINDOW = 0x08000000 if os.name == "nt" else 0
 _STDERR_TAIL = 24
@@ -109,6 +115,10 @@ class BackendSupervisor:
         with self._lock:
             self._stopping = True
             proc = self._proc
+            # Wake wait_for_url() so a _boot blocked on it returns at once —
+            # otherwise a WM_CLOSE during the splash phase (backend still
+            # booting) would hang process exit for up to the full timeout.
+            self._url_cond.notify_all()
         if proc is None:
             self._watchdog_stop.set()
             return
@@ -139,6 +149,8 @@ class BackendSupervisor:
         deadline = time.monotonic() + timeout
         with self._url_cond:
             while self._final_url is None:
+                if self._stopping:
+                    return None  # supervisor is shutting down — stop waiting
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     return None
@@ -149,6 +161,12 @@ class BackendSupervisor:
     def url(self) -> str | None:
         with self._lock:
             return self._final_url
+
+    @property
+    def stderr_tail_text(self) -> str:
+        """Last stderr lines, for a user-facing boot-failure message."""
+        with self._lock:
+            return "\n".join(self._stderr_tail[-_STDERR_TAIL:])
 
     # -- readers / watchdog --------------------------------------------------
 

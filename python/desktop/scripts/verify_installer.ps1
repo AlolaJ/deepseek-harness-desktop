@@ -132,6 +132,23 @@ function Invoke-InstalledBoot([string]$ExePath, [string]$DataDir, [string]$Label
   if (-not $node) { throw 'backend node not spawned' }
   Write-Host "  backend pid=$($node.ProcessId)"
 
+  # The splash window appears BEFORE the backend finishes booting — wait for
+  # the boot URL in shell.log so this probe actually proves the installed
+  # backend boots (closing early would kill it mid-boot).
+  $log = Join-Path $DataDir 'shell.log'
+  $booted = $false
+  $urlDeadline = (Get-Date).AddSeconds(90)
+  while ((Get-Date) -lt $urlDeadline) {
+    $logText = Get-Content $log -Raw -ErrorAction SilentlyContinue
+    if ($logText -match 'backend URL: http://') { $booted = $true; break }
+    Start-Sleep -Milliseconds 500
+  }
+  if (-not $booted) {
+    Write-Host "  SHELL.LOG:`n$(Get-Content $log -Raw -ErrorAction SilentlyContinue)"
+    throw "$Label`: backend did not report a URL before the probe timeout"
+  }
+  Write-Host '  backend reported its URL'
+
   [void][VerProbe]::PostMessageW($hwnd, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero) # WM_CLOSE
   if (-not $p.WaitForExit(25000)) { $p.Kill(); throw 'did not exit after WM_CLOSE' }
   Write-Host "  exited code=$($p.ExitCode)"
