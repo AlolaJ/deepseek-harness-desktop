@@ -244,6 +244,10 @@ function Invoke-BootProbe([string]$ExePath, [string]$ProbeRoot, [string]$Label) 
   # shell.log all land in the user's real data dir and the assertions below
   # target a dir that is never written.
   $env:DSH_DESKTOP_DATA_DIR = $data
+  # Close-to-tray escape hatch: the shell's X button normally hides to the tray,
+  # but the probe drives it with WM_CLOSE and must get a real exit to assert
+  # zero leftover processes.
+  $env:DSH_DESKTOP_E2E_CLOSE_EXIT = '1'
 
   $out = Join-Path $ProbeRoot 'stdout.log'
   $err = Join-Path $ProbeRoot 'stderr.log'

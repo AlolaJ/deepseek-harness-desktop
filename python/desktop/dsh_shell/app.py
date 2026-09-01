@@ -20,6 +20,7 @@ from pathlib import Path
 import webview  # type: ignore
 
 from . import config
+from . import tray as tray_mod
 from .backend import BackendSupervisor
 from .log import log
 
@@ -148,6 +149,52 @@ def run() -> int:
             log(f"==> rebind failed: {exc}")
 
     supervisor.on_url = rebind
+
+    # ---- close-to-tray --------------------------------------------------
+    # Clicking the window's X hides it to the system tray (the backend keeps
+    # running in the background); only the tray's 退出/Exit actually quits.
+    # pywebview 6.x has no tray support, so the tray is a WinForms NotifyIcon
+    # on its own STA thread (dsh_shell/tray.py). `DSH_DESKTOP_E2E_CLOSE_EXIT`
+    # (config.close_exits) is the probe escape hatch: the build/installer boot
+    # probes drive the app with WM_CLOSE and need it to exit for their
+    # zero-leftovers assertion.
+    exiting = {"flag": False}
+
+    def _show_from_tray() -> None:
+        try:
+            window.show()
+        except Exception as exc:  # noqa: BLE001 — best-effort
+            log(f"==> show from tray failed: {exc}")
+
+    def _exit_from_tray() -> None:
+        if exiting["flag"]:
+            return
+        exiting["flag"] = True
+        log("==> tray: exit requested")
+        try:
+            # destroy() marshals to the pywebview UI thread and runs the normal
+            # close flow; on_closing sees the flag and lets the close proceed.
+            window.destroy()
+        except Exception as exc:  # noqa: BLE001 — never leave an inert app
+            log(f"==> tray: window destroy failed, forcing exit: {exc}")
+            os._exit(1)
+
+    tray = tray_mod.create(config.tray_icon(), _show_from_tray, _exit_from_tray) if not config.close_exits() else None
+
+    def _on_closing(**_kw) -> bool | None:
+        if exiting["flag"] or config.close_exits():
+            return None  # allow the close -> normal full shutdown
+        # Cancel the close and park the app in the tray instead.
+        try:
+            window.hide()
+        except Exception as exc:  # noqa: BLE001 — best-effort
+            log(f"==> hide-to-tray failed: {exc}")
+        if tray is not None:
+            tray.notify_balloon("仍在后台运行 · still running in the background")
+        return False
+
+    if tray is not None:
+        window.events.closing += _on_closing
 
     try:
         # debug=False is the production WebView2 path (GPU + optimized rendering).

@@ -112,6 +112,32 @@ def app_icon() -> Path:
     return _DEV_BASE / "assets" / "icon.png"
 
 
+def tray_icon() -> Path:
+    """An .ico for the system-tray NotifyIcon.
+
+    Prefer an actual .ico in both layouts (`assets/icon.ico` is kept in the
+    repo next to the .png). Falls back to `app_icon()` (which for a dev launch
+    is a .png) — the tray then converts a bitmap on the fly, but the repo ships
+    both formats so the .ico branch is what normally runs.
+    """
+    ico = _frozen_base() / "icon.ico" if is_frozen() else _DEV_BASE / "assets" / "icon.ico"
+    if ico.is_file():
+        return ico
+    return app_icon()
+
+
+def close_exits() -> bool:
+    """E2E / boot-probe escape hatch for close-to-tray.
+
+    When `DSH_DESKTOP_E2E_CLOSE_EXIT=1`, the window's X button fully quits the
+    app instead of hiding to the system tray. The build/installer probe
+    scripts (`build_desktop.ps1`, `verify_installer.ps1`) drive the app with
+    WM_CLOSE and then assert zero leftover processes, so they must set this to
+    keep the tray from absorbing the close.
+    """
+    return os.environ.get("DSH_DESKTOP_E2E_CLOSE_EXIT") == "1"
+
+
 def app_mutex_name() -> str:
     """Named mutex for single-instance / installer 'is it running' detection."""
     return f"Global\\{APP_NAME}.{_APP_ID}"

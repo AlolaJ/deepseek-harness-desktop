@@ -109,6 +109,9 @@ function Invoke-InstalledBoot([string]$ExePath, [string]$DataDir, [string]$Label
   # Point the shell at the probe data dir so webview2/backend/shell.log stay out
   # of the real %LOCALAPPDATA%\DeepSeekHarness (mirrors build_desktop.ps1).
   $env:DSH_DESKTOP_DATA_DIR = $DataDir
+  # Close-to-tray escape hatch: the probe sends WM_CLOSE and needs a real exit
+  # (the X button otherwise hides the app to the system tray).
+  $env:DSH_DESKTOP_E2E_CLOSE_EXIT = '1'
   $out = Join-Path $probeRoot 'stdout.log'
   $err = Join-Path $probeRoot 'stderr.log'
   $p = Start-Process -FilePath $ExePath -WorkingDirectory $probeRoot -PassThru `
