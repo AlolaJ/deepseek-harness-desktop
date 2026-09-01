@@ -39,3 +39,11 @@ apps/web/dist/
 worktrees/
 .agents/worktrees/
 .typert-*/
+
+# desktop packaging (python/desktop): build scratch, venv, installer outputs
+python/desktop/.build/
+python/desktop/.venv/
+python/desktop/dist/
+
+# inno default output dir (early probe compiles)
+python/desktop/inno/Output/

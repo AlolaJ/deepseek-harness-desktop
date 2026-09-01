@@ -19,6 +19,9 @@ packages:
   # Deploy root of the single-exe build: a pure dependency manifest whose
   # closure is what the exe bundles and what the Python runtime distributes.
   - python/sdk-runtime
+  # Deploy root for the desktop shell's self-contained node backend closure
+  # (`pnpm --filter dsh-desktop-runtime deploy`). Not a build target.
+  - python/desktop/deploy-root
 
 # Vendored framework packages keep their upstream semver ranges, while local
 # builds must resolve those matching names to this workspace's pinned sources.

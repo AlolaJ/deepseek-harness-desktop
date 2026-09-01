@@ -1,0 +1,4 @@
+# Desktop shell: a Python + WebView2 window hosting the `dsh web` UI (no Qt).
+# On Windows `pywebview` drives Edge WebView2 via pythonnet (cp313 wheels).
+# Requires the WebView2 runtime (shipped with Edge / Windows 11).
+pywebview>=6,<7
