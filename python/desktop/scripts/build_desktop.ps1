@@ -401,7 +401,10 @@ if ((Get-Command node -ErrorAction SilentlyContinue)) {
   # Derive icon.ico from assets/icon.png with a centered 1.5x zoom crop FIRST so
   # the enlarged glyph lands in the EXE's PE icon (spec reads assets/icon.ico),
   # the staged resources copy, and the titlebar/taskbar at runtime.
-  & (Join-Path $ScriptDir 'make_icon.ps1') -Out (Join-Path $DesktopRoot 'assets\icon.ico' -ErrorAction Stop)
+  # -Force: the ico is derived from icon.png on every build. The timestamp
+  # skip let a hand-regenerated (crop-less) ico survive builds and shrink the
+  # taskbar glyph back to the uncropped size.
+  & (Join-Path $ScriptDir 'make_icon.ps1') -Force -Out (Join-Path $DesktopRoot 'assets\icon.ico' -ErrorAction Stop)
   Copy-Item (Join-Path $DesktopRoot 'assets\icon.ico') (Join-Path $ResDir 'icon.ico') -Force -ErrorAction Continue
   if (-not (Test-Path (Join-Path $ResDir 'node.exe'))) { throw 'node.exe could not be staged' }
   Write-Host "  node.exe $((Get-Item (Join-Path $ResDir 'node.exe')).Length) bytes"
