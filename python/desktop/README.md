@@ -1,5 +1,7 @@
 # dsh desktop shell (`python/desktop`)
 
+English | [中文](README.zh.md)
+
 A thin Python desktop shell for the DeepSeek Harness web UI. It spawns the
 local `dsh web` backend and embeds the served web interface in a **WebView2**
 window (via [`pywebview`](https://pywebview.flowrl.com/)). It replaces the
