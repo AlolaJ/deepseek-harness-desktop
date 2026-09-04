@@ -1112,7 +1112,7 @@ describe('compat switches', () => {
 
     const content = typeof result.message.content === 'string'
       ? result.message.content
-      : result.message.content.map(block => block.text).join('')
+      : result.message.content.filter(block => block.type === 'text').map(block => block.text).join('')
     expect(content).toContain('hello')
     expect(result.finish.kind).toBe('stop')
   })

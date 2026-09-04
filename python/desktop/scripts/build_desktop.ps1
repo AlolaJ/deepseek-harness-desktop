@@ -58,7 +58,13 @@ function Section([string]$Name) { Write-Host "`n=== [$Name] ===" -ForegroundColo
 
 function Invoke-Native {
   param([Parameter(Mandatory)][scriptblock]$ScriptBlock)
-  & $ScriptBlock
+  # PowerShell 5.1 turns redirected native stderr into ErrorRecords, which are
+  # terminating under $ErrorActionPreference='Stop'. Native commands legitimately
+  # write to stderr (pnpm echoes every script it runs there), so relax the
+  # preference for the call and keep the real gate: the process exit code.
+  $previous = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  try { & $ScriptBlock } finally { $ErrorActionPreference = $previous }
   if ($LASTEXITCODE -ne 0) { throw "command failed (exit $LASTEXITCODE): $ScriptBlock" }
 }
 
