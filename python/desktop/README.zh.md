@@ -105,7 +105,7 @@ node.exe + `dsh` CLI 闭包 + `apps/web` dist):
 
 | 步骤 | 产物 | 内容 |
 | ---- | ---- | ---- |
-| preflight | — | 校验 `apps/cli/lib/bin.js` + `apps/web/dist`(缺失则 `pnpm run build`) |
+| preflight | — | 校验 `apps/cli/lib/bin.js` + `apps/web/dist`,且记录的 client 构建档案为 `official`(否则运行 `pnpm run build:official`)——打包进 EXE 的 UI 必须显示官方品牌,而不是本地构建回退标识 |
 | closure deploy | `.build/resources/cli` | `pnpm --filter dsh-desktop-runtime deploy --prod --legacy` → 自包含 `node_modules`;此处应用三个完整性修复:(1) vendor 覆盖被解除 link 的依赖物化为真实副本,(2) 被 `link:` 覆盖的 `@deepseek-ai/{cosmokit,schemastery}` 从 `vendor/` 物化(pnpm 从不在输出树里交付它们),(3) 仅作为 peer 的 `workspace:` 包(`@deepseek-ai/dsh-*`、`cordis-plugin-group`)因 deploy-root 把它们声明为**常规**依赖而得以安装——pnpm 不会在 deploy 中自动安装 `workspace:` 协议的 peer |
 | closure smoke | `.build/closure-smoke/` | EXE 前启动门:用 node 以 `<closure>` 启动 `dsh web --port 0 --no-open` 并断言打印 HTTP URL——坏闭包在数秒内使构建失败,不让 PyInstaller 白跑约 5 分钟 |
 | runtime resources | `.build/resources/{node.exe, icon.ico}` | 捆绑的 node + 应用图标 |

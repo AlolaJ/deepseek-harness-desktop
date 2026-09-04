@@ -111,7 +111,7 @@ Pipeline (see `scripts/build_desktop.ps1` for flags like `-SkipDeploy`):
 
 | Step | Produces | What happens |
 | ---- | -------- | ------------ |
-| preflight | — | verifies `apps/cli/lib/bin.js` + `apps/web/dist` (else `pnpm run build`) |
+| preflight | — | verifies `apps/cli/lib/bin.js` + `apps/web/dist`, and that the recorded client build profile is `official` (otherwise `pnpm run build:official`) — the packaged UI must show the official brand, not the local-build fallback |
 | closure deploy | `.build/resources/cli` | `pnpm --filter dsh-desktop-runtime deploy --prod --legacy` → a self-contained `node_modules`; three completeness fixes applied here: (1) link: vendor overrides de-linked into real copies, (2) the `link:`-overridden `@deepseek-ai/{cosmokit,schemastery}` materialized from `vendor/` (pnpm never ships them in the output tree), (3) peer-only `workspace:` packages (`@deepseek-ai/dsh-*`, `cordis-plugin-group`) installed because `deploy-root` declares them as **regular** deps — pnpm won't auto-install a `workspace:`-protocol peer in a deploy |
 | closure smoke | `.build/closure-smoke/` | pre-EXE boot gate: launches `<closure>` `dsh web --port 0 --no-open` with node and asserts it prints an HTTP URL — a broken closure fails the build in seconds, before PyInstaller spends ~5 min |
 | runtime resources | `.build/resources/{node.exe, icon.ico}` | bundled node + the app icon |

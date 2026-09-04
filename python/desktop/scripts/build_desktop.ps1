@@ -7,7 +7,10 @@
   Pipeline (each stage is skippable for iteration):
 
     stage 0  ensure venv + pyinstaller/pillow
-    stage 1  preflight repo build   (apps/cli/lib/bin.js + apps/web/dist) else pnpm run build
+    stage 1  preflight repo build   (apps/cli/lib/bin.js + apps/web/dist) else pnpm run build:official
+                                     (re-runs when the recorded client profile is not official,
+                                      so the bundled UI carries the official brand, not the
+                                      local-build fallback)
     stage 2  closure deploy         pnpm --filter dsh-desktop-runtime deploy  -> .build/resources/cli
                                      (+ de-link the link:vendor/* reparse points into real copies
                                       + materialize link:-overridden vendor/{cosmokit,schemastery}
@@ -345,16 +348,32 @@ $PyVer = & $Py --version
 Write-Host "venv: $PyVer"
 
 # -- stage 1: preflight repo build --------------------------------------------
+# The packaged UI must carry the official brand (whale mark + DeepSeek Harness
+# wordmark). Client artifacts decide that at build time via DSH_CLIENT_*:
+# a default `pnpm run build` leaves the sidebar on the local-build fallback,
+# so require the official-profile build record and rebuild otherwise.
 
 $cliBin = Join-Path $RepoRoot 'apps\cli\lib\bin.js'
 $webDist = Join-Path $RepoRoot 'apps\web\dist\index.html'
-if ((Test-Path $cliBin) -and (Test-Path $webDist)) {
-  Section 'preflight: workspace build present'
+$buildRecord = Join-Path $RepoRoot '.dsh-build\client-build-environment.json'
+$officialRecorded = $false
+if (Test-Path $buildRecord) {
+  try {
+    $record = Get-Content $buildRecord -Raw | ConvertFrom-Json
+    $officialRecorded = ($record.environment.'DSH_CLIENT_BUILD_PROFILE' -eq 'official')
+  } catch { $officialRecorded = $false }
+}
+if ((Test-Path $cliBin) -and (Test-Path $webDist) -and $officialRecorded) {
+  Section 'preflight: workspace build present (official profile)'
 } else {
-  Section 'preflight: workspace build missing -> pnpm run build'
+  if (-not $officialRecorded) {
+    Section 'preflight: official client profile not recorded -> pnpm run build:official'
+  } else {
+    Section 'preflight: workspace build missing -> pnpm run build:official'
+  }
   Push-Location $RepoRoot
-  try { Invoke-Native { & pnpm run build } } finally { Pop-Location }
-  if (-not (Test-Path $cliBin) -or -not (Test-Path $webDist)) { throw 'pnpm run build did not produce apps/cli/lib/bin.js + apps/web/dist' }
+  try { Invoke-Native { & pnpm run build:official } } finally { Pop-Location }
+  if (-not (Test-Path $cliBin) -or -not (Test-Path $webDist)) { throw 'pnpm run build:official did not produce apps/cli/lib/bin.js + apps/web/dist' }
 }
 
 # -- stage 2: pnpm install (register deploy-root) + closure deploy ------------
