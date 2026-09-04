@@ -9,7 +9,7 @@ import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { ModelsSection, providerCopy } from '../src/client/ModelsSection.tsx'
 import type { ModelsSectionInjected, ModelsSectionProps } from '../src/client/ModelsSection.tsx'
 import { CustomProviderCard } from '../src/client/CustomProviderCard.tsx'
-import { formatCapacity, parseCapacity } from '../src/client/DeepSeekModelsEditor.tsx'
+import { formatCapacity, parseCapacity, validateDeepSeekModels } from '../src/client/DeepSeekModelsEditor.tsx'
 import { SettingsDescribeMirror } from '@deepseek-ai/dsh-client-ui-settings/src/client/settings-mirror.ts'
 import { ModelsSettingsStore, deriveKeyRef, protocolChoices } from '../src/client/store.ts'
 import { createModelsOperations } from '../src/client/operations.ts'
@@ -1469,5 +1469,103 @@ describe('API key field', () => {
     await waitFor(() => { expect(mutate).toHaveBeenCalledOnce() })
     await waitFor(() => { expect(load).toHaveBeenCalledOnce() })
     expect(screen.queryByText(en.customTitle)).toBeNull()
+  })
+})
+
+describe('thinking intensity on a model row', () => {
+  /** The one row's level checkboxes, named by the level word they stand for. */
+  function levelBox(level: string): HTMLInputElement {
+    return screen.getByLabelText(`${en.modelReasoningEfforts} ${level} 1`) as HTMLInputElement
+  }
+
+  it('writes the declared dict once a level is checked, and keeps off valueless', async () => {
+    const { mutate } = await mountSection({
+      providers: { openai: { baseURL: 'https://proxy.example/v1', models: [{ id: 'acme-large' }] } },
+    })
+    openEditor('openai')
+    expandModel(1)
+
+    // Untouched rows carry no efforts key: nothing is written until the user
+    // decides, so a catalog-inherited model keeps its declared behavior.
+    expect(levelBox('minimal').checked).toBe(false)
+    expect(levelBox('high').checked).toBe(false)
+
+    fireEvent.click(levelBox('minimal'))
+    expect(levelBox('minimal').checked).toBe(true)
+    fireEvent.click(levelBox('high'))
+    expect(levelBox('high').checked).toBe(true)
+
+    fireEvent.click(screen.getByText(en.apply))
+    await waitFor(() => { expect(mutate).toHaveBeenCalled() })
+    expect(firstMutate(mutate).ops).toEqual([{
+      op: 'set',
+      path: ['providers', 'openai', 'models'],
+      value: [{ id: 'acme-large', reasoningEfforts: { off: null, minimal: 'minimal', high: 'high' } }],
+    }])
+  })
+
+  it('unchecking the last level writes false, the model does not think', async () => {
+    const { mutate } = await mountSection({
+      providers: {
+        openai: {
+          baseURL: 'https://proxy.example/v1',
+          models: [{ id: 'acme-large', reasoningEfforts: { off: null, minimal: 'minimal' } }],
+        },
+      },
+    })
+    openEditor('openai')
+    expandModel(1)
+
+    // The stored dict materializes the draft, so the declared level reads back checked.
+    expect(levelBox('minimal').checked).toBe(true)
+    fireEvent.click(levelBox('minimal'))
+    expect(levelBox('minimal').checked).toBe(false)
+
+    fireEvent.click(screen.getByText(en.apply))
+    await waitFor(() => { expect(mutate).toHaveBeenCalled() })
+    expect(firstMutate(mutate).ops).toEqual([{
+      op: 'set',
+      path: ['providers', 'openai', 'models'],
+      value: [{ id: 'acme-large', reasoningEfforts: false }],
+    }])
+  })
+})
+
+describe('reasoningEfforts validation', () => {
+  /** Wrap one efforts value in the minimal valid row. */
+  const row = (efforts: unknown): unknown[] => [{ id: 'ok', reasoningEfforts: efforts }]
+
+  it('accepts false and a dict the adapter would offer', () => {
+    expect(validateDeepSeekModels(row(false))).toBeUndefined()
+    expect(validateDeepSeekModels(row({ off: null, minimal: 'minimal' }))).toBeUndefined()
+    expect(validateDeepSeekModels(row({ off: null, low: 'low', high: 'high' }))).toBeUndefined()
+    // Levels outside the settings UI's four are still legal profile values.
+    expect(validateDeepSeekModels(row({ off: null, xhigh: 'xhigh' }))).toBeUndefined()
+    // `off` may carry a wire spelling of its own; only a non-off level forces one.
+    expect(validateDeepSeekModels(row({ off: 'none', low: 'low' }))).toBeUndefined()
+    // A row without the key at all stays untouched.
+    expect(validateDeepSeekModels([{ id: 'ok' }])).toBeUndefined()
+  })
+
+  it('refuses shapes the adapter would reject, naming the new message', () => {
+    const invalid = (value: unknown): void => {
+      expect(validateDeepSeekModels(value)).toMatchObject({
+        index: 0,
+        key: 'modelReasoningEffortsInvalid',
+      })
+    }
+    invalid(row({ off: null })) // off alone declares nothing
+    invalid(row({})) // empty dict
+    invalid(row({ low: null })) // only off may stay valueless
+    invalid(row({ off: '', low: 'low' })) // no empty wire spellings
+    invalid(row({ low: 42 })) // levels are wire spellings, not numbers
+    invalid(row({ minimal: 'minimal', turbo: 'turbo' })) // unknown level key
+    invalid(row('high')) // not a dict, not false
+    // A valid `false` row in the middle does not short-circuit the scan.
+    expect(validateDeepSeekModels([{ id: 'ok', reasoningEfforts: { off: null, low: 'low' } }, { id: 'bad', reasoningEfforts: false }, { id: 'worse', reasoningEfforts: {} }]))
+      .toMatchObject({ index: 2, key: 'modelReasoningEffortsInvalid' })
+    // The failure lands on the row that carries the bad value, not the first.
+    expect(validateDeepSeekModels([{ id: 'a' }, { id: 'b', reasoningEfforts: {} }]))
+      .toMatchObject({ index: 1, key: 'modelReasoningEffortsInvalid' })
   })
 })

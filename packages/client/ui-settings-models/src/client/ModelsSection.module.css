@@ -514,6 +514,38 @@
   line-height: 18px;
 }
 
+.modelLevels {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.modelLevelRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.modelLevel {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  font-size: 13px;
+  cursor: pointer;
+  accent-color: var(--dsw-alias-brand-primary);
+}
+
+.modelLevelHint {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
 .modelEmpty {
   padding: 12px;
   border: 1px dashed var(--dsw-alias-border-l3);

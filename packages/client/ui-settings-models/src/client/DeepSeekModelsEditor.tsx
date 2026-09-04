@@ -68,13 +68,42 @@ export function formatCapacity(value: number): string {
   return String(value)
 }
 
+/**
+ * The levels a `reasoningEfforts` dict may carry, after `off` is set aside:
+ * catalog.ts `THINKING_LEVELS` in llm-pi-ai plus the legacy `max` alias.
+ */
+const REASONING_LEVEL_KEYS = new Set(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'])
+
+/**
+ * Whether the value is a shape the adapter would accept, mirroring
+ * catalog.ts's resolution checks: keys within the level vocabulary, every
+ * declared level carrying a non-empty wire spelling (`null` only for `off`),
+ * and at least one level beyond `off`. `false` — the model does not think —
+ * is the other accepted spelling.
+ */
+function reasoningEffortsValid(value: unknown): boolean {
+  if (value === false) return true
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
+  const entries = Object.entries(value)
+  // An empty dict declares nothing: neither "inherit" (omit the field) nor
+  // "disable" (`false`) — the adapter refuses it at resolution.
+  if (entries.length === 0) return false
+  if (entries.some(([key]) => !REASONING_LEVEL_KEYS.has(key))) return false
+  const spelled = (level: unknown): boolean =>
+    typeof level === 'string' && level.length > 0
+  if (!entries.every(([key, level]) => (key === 'off' ? level === null || spelled(level) : spelled(level)))) {
+    return false
+  }
+  return entries.some(([key]) => key !== 'off')
+}
+
 /** A localized validation failure for one user-owned model array. */
 export interface DeepSeekModelsValidationFailure {
   /** Zero-based model position. */
   index: number
   /** Message key owned by the Models settings section. */
   key: 'modelIdRequired' | 'modelIdDuplicate' | 'modelNameInvalid' | 'modelContextInvalid'
-  | 'modelMaxTokensInvalid'
+  | 'modelMaxTokensInvalid' | 'modelReasoningEffortsInvalid'
 }
 
 /** Convert a schema-validated catalog value into records without dropping hidden fields. */
@@ -117,6 +146,13 @@ export function validateDeepSeekModels(value: unknown): DeepSeekModelsValidation
     if (maxTokens !== undefined
       && (typeof maxTokens !== 'number' || !Number.isInteger(maxTokens) || maxTokens <= 0)) {
       return { index, key: 'modelMaxTokensInvalid' }
+    }
+    // `reasoningEfforts` arrives only on pi-ai rows (the DeepSeek family never
+    // declares it), but the shape is shared so the gate stays here: `false`
+    // is valid, as is a dict the adapter would offer, and nothing else.
+    const reasoningEfforts = model['reasoningEfforts']
+    if (reasoningEfforts !== undefined && !reasoningEffortsValid(reasoningEfforts)) {
+      return { index, key: 'modelReasoningEffortsInvalid' }
     }
   }
   return undefined

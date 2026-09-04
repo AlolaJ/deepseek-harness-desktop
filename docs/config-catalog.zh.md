@@ -1159,7 +1159,9 @@ export interface PiAiModelProfile {
    * entry's capability (a hand-declared model has none and does not reason);
    * `false` declares a non-reasoning model, which is how a profile strips
    * reasoning from a catalog model its gateway cannot serve; a non-empty dict
-   * declares the offered levels and their wire spellings.
+   * declares the offered levels and their wire spellings. The settings page's
+   * model rows expose the common four (minimal/low/medium/high) as a
+   * thinking-intensity checkbox group, writing this same field.
    */
   reasoningEfforts?: false | PiAiReasoningEfforts
   /** pi-ai wire-compatibility switches for this model, winning over the route's per field; one its protocol does not declare is refused. */
@@ -1208,7 +1210,14 @@ export interface PiAiCompatProfile {
   supportsUsageInStreaming?: boolean
   /**
    * Whether streams include `finish_reason`; `false` lets pi-ai infer the
-   * terminal reason when the stream ends; `openai-completions`.
+   * terminal reason when the stream ends; `openai-completions`. Resolution
+   * defaults this to `false` for a catalog-unknown (or protocol-repointed)
+   * `openai-completions` model when neither the route nor the entry configures
+   * it: many OpenAI-compatible gateways end cleanly on `[DONE]` without ever
+   * emitting a `finish_reason` chunk, and strictness there turns every
+   * response into "Stream ended without finish_reason". A configured value
+   * always wins, and an installed-catalog model keeps its declared/detected
+   * behavior.
    */
   supportsFinishReason?: boolean
   /** Which output-cap field the endpoint reads; `openai-completions`. */

@@ -15,7 +15,7 @@ import { resolveProfiles } from '../src/config.ts'
 import { buildProvider, supportedProtocols } from '../src/provider.ts'
 import { assemble } from './assemble.ts'
 import { memoryAuth } from './auth-double.ts'
-import { closeMockServers, mockServer, textEvents } from './mock-server.ts'
+import { closeMockServers, mockServer, noFinishReasonEvents, textEvents } from './mock-server.ts'
 
 const homes: string[] = []
 
@@ -775,8 +775,11 @@ describe('compat switches', () => {
       },
     }, 'acme-gateway')
 
-    expect(models.get('dialect-default')?.compat).toEqual({ thinkingFormat: 'deepseek' })
-    expect(models.get('dialect-odd')?.compat).toEqual({ thinkingFormat: 'openai', supportsReasoningEffort: false })
+    // Both hand-declared completions models also carry the stream-shape
+    // resolve default: nothing configured stream shape anywhere, so a clean
+    // stream end is trusted as completion.
+    expect(models.get('dialect-default')?.compat).toEqual({ thinkingFormat: 'deepseek', supportsFinishReason: false })
+    expect(models.get('dialect-odd')?.compat).toEqual({ thinkingFormat: 'openai', supportsReasoningEffort: false, supportsFinishReason: false })
   })
 
   it('merges the switches over the catalog entry’s own compat instead of replacing it', () => {
@@ -843,6 +846,7 @@ describe('compat switches', () => {
     expect(models.get('acme-think')?.compat).toEqual({
       supportsDeveloperRole: false,
       maxTokensField: 'max_tokens',
+      supportsFinishReason: false,
     })
   })
 
@@ -916,6 +920,7 @@ describe('compat switches', () => {
     expect(models.get('qwen-local')?.compat).toEqual({
       thinkingFormat: 'qwen-chat-template',
       chatTemplateKwargs: { enable_thinking: { $var: 'thinking.enabled' } },
+      supportsFinishReason: false,
     })
   })
 
@@ -942,6 +947,80 @@ describe('compat switches', () => {
       chatTemplateArgs: { enable_thinking: { $var: 'thinking.enabled' } },
       supportsThinkingTokenBudget: true,
     })
+  })
+
+  it('defaults a catalog-unknown completions model to trusting a clean stream end', () => {
+    // Many OpenAI-compatible gateways end a stream on `[DONE]` and never send
+    // a finish_reason chunk; pi-ai would throw "Stream ended without
+    // finish_reason" on that deterministic case. With no value configured
+    // anywhere, resolution trusts the clean end, mirroring the trailing
+    // `pendingFinish ?? { kind: 'stop' }` the official adapter's translation
+    // already applies.
+    const models = modelsOf({
+      'acme-gateway': {
+        api: 'openai-completions',
+        baseURL: 'https://acme.test',
+        models: [{ id: 'acme-plain' }],
+      },
+    }, 'acme-gateway')
+
+    expect(models.get('acme-plain')?.compat).toEqual({ supportsFinishReason: false })
+  })
+
+  it('lets a configured stream-shape switch override the resolve default', () => {
+    // A gateway that does emit finish_reason keeps pi-ai's strict check; a
+    // configured value beats the lenient default exactly like any other compat
+    // switch beats inheritance.
+    const models = modelsOf({
+      'acme-gateway': {
+        api: 'openai-completions',
+        baseURL: 'https://acme.test',
+        models: [{
+          id: 'acme-strict',
+          compat: { supportsFinishReason: true },
+        }],
+      },
+    }, 'acme-gateway')
+
+    expect(models.get('acme-strict')?.compat).toEqual({ supportsFinishReason: true })
+  })
+
+  it('honours the route switch over the resolve default for stream shape', () => {
+    // The route's switch and the default are alternate spellings, and the
+    // configured one must win field for field like every other route switch.
+    const models = modelsOf({
+      'acme-gateway': {
+        api: 'openai-completions',
+        baseURL: 'https://acme.test',
+        compat: { supportsFinishReason: true },
+        models: [{ id: 'acme-plain' }],
+      },
+    }, 'acme-gateway')
+
+    expect(models.get('acme-plain')?.compat).toEqual({ supportsFinishReason: true })
+  })
+
+  it('leaves an installed catalog model’s compat untouched', () => {
+    // The default exists for models no catalog entry can describe. A catalog
+    // model on its own protocol keeps its installed compat verbatim — nothing
+    // is invented about the stream shape it is already known to produce.
+    const catalog = getBuiltinModels('openai') as readonly Model<Api>[]
+    const responses = catalog.find(model => model.api === 'openai-responses')
+    if (responses === undefined) throw new Error('openai no longer ships a responses catalog')
+
+    const models = modelsOf({ openai: { models: [{ id: responses.id }] } }, 'openai')
+
+    expect(models.get(responses.id)?.compat).toEqual(responses.compat)
+  })
+
+  it('defaults stream-shape trust when a catalog route is repointed at completions', () => {
+    // A catalog model moved onto another protocol has no installed compat in
+    // that protocol's shape, so the lenient default applies to it too.
+    const models = modelsOf({
+      openai: { api: 'openai-completions', models: [{ id: 'gpt-4.1' }] },
+    }, 'openai')
+
+    expect(models.get('gpt-4.1')?.compat).toEqual({ supportsFinishReason: false })
   })
 
   it('rejects a model switch on an unrecognized protocol as having no configurable compat', () => {
@@ -1002,6 +1081,74 @@ describe('compat switches', () => {
 
     const request = server.requests[0] as { messages: { role: string }[] }
     expect(request.messages.map(message => message.role)).toEqual(['system'])
+  })
+
+  it('completes a custom route whose stream never sends a finish_reason', async () => {
+    // The reported failure, end to end: a gateway serves content chunks and
+    // ends on `[DONE]`, pi-ai's stream sees no finish_reason chunk, and the
+    // resolve default translates the clean end into a normal `stop` instead
+    // of the "Stream ended without finish_reason" throw. Genuine mid-stream
+    // drops raise their SDK error before this and still reach the retry path.
+    const server = await mockServer([{ events: noFinishReasonEvents }])
+    const dir = await home()
+    const ctx = await bootWithSettings(dir, {})
+    await ctx.settings.update('llm-pi-ai', {
+      providers: {
+        'acme-gateway': {
+          apiKeyEnv: KEY_ENV,
+          api: 'openai-completions',
+          baseURL: `${server.url}/v1`,
+          models: [{ id: 'acme-plain' }],
+        },
+      },
+    })
+
+    const result = await assemble(ctx, {
+      provider: 'acme-gateway',
+      model: 'acme-plain',
+      system: 'you are a harness',
+      messages: [],
+    })
+
+    const content = typeof result.message.content === 'string'
+      ? result.message.content
+      : result.message.content.map(block => block.text).join('')
+    expect(content).toContain('hello')
+    expect(result.finish.kind).toBe('stop')
+  })
+
+  it('still fails a stream without finish_reason when the route opts into strictness', async () => {
+    // The lenient default is exactly that: a configured strict route keeps
+    // pi-ai's check, so an operator who knows their gateway always sends a
+    // finish_reason chunk still gets told when it does not.
+    const server = await mockServer([{ events: noFinishReasonEvents }])
+    const dir = await home()
+    const ctx = await bootWithSettings(dir, {})
+    await ctx.settings.update('llm-pi-ai', {
+      providers: {
+        'acme-gateway': {
+          apiKeyEnv: KEY_ENV,
+          api: 'openai-completions',
+          baseURL: `${server.url}/v1`,
+          compat: { supportsFinishReason: true },
+          models: [{ id: 'acme-plain' }],
+        },
+      },
+    })
+
+    const result = await assemble(ctx, {
+      provider: 'acme-gateway',
+      model: 'acme-plain',
+      system: 'you are a harness',
+      messages: [],
+    })
+
+    // The harness carries a terminal stream failure as a finish error chunk
+    // rather than a rejected stream, so the request-shaped surface is what
+    // pi-ai's throw becomes — and the retry policy sees the same wording it
+    // has always classified.
+    expect(result.finish.kind).toBe('error')
+    expect((result.finish as { failure?: { message?: string } }).failure?.message).toMatch(/finish_reason/)
   })
 
   it('refuses a valueless compat key rather than writing null over the catalog', () => {

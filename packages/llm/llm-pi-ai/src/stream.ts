@@ -52,9 +52,12 @@ function classifyPiAiError(message: string): string {
   // A stream truncated before the provider's terminal event: each pi-ai provider
   // throws its own wording when the wire closes mid-response without a terminal
   // event (`… stream ended before message_stop`, `… before a terminal response
-  // event`, `… ended without a terminal event`, `Stream ended without
-  // finish_reason`). The connection dropped mid-response, so this is a transport
-  // truncation, not a model-level error.
+  // event`, `… ended without a terminal event`). `Stream ended without
+  // finish_reason` reaches here from a gateway that ends cleanly on `[DONE]`
+  // only when a route opted into strictness — the resolution default trusts a
+  // clean openai-completions end for unconfigured models (see
+  // `resolveModelCompat` in catalog.ts) — so a real mid-response drop is what
+  // this classification is left to catch, and resending stays the right move.
   if (/stream ended (?:before|without)\b/i.test(message)) return 'TRANSPORT'
   if (/\b(?:network|connection|socket|fetch)\b|\bECONN[A-Z]+\b/i.test(message)
     || /\b(?:other side closed|HTTP2 request did not get a response|WebSocket closed unexpectedly)\b/i.test(message)

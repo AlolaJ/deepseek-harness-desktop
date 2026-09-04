@@ -152,6 +152,39 @@ function adopt(candidate: LlmDiscoveredModel): ModelDraft {
 }
 
 /**
+ * The per-request "thinking intensity" levels this surface offers, and the
+ * wire spelling dispatch sends for each (they are the same name).
+ *
+ * Mirrors `THINKING_LEVELS` in packages/llm/llm-pi-ai/src/catalog.ts, which
+ * is the schema's source of truth; the settings surface deliberately does not
+ * depend on the adapter package, so the couple of levels it offers are spelled
+ * here. `off` is never offered as a checkbox: every declared dict carries it as
+ * the valueless "support thinking, send nothing" entry (`{ off: null, … }`),
+ * so unchecking every level writes `reasoningEfforts: false` — "this model
+ * does not think" — and checking any level rewrites the dict including `off`.
+ */
+const REASONING_LEVELS = [
+  { level: 'minimal', labelKey: 'modelReasoningLevelMinimal' as const },
+  { level: 'low', labelKey: 'modelReasoningLevelLow' as const },
+  { level: 'medium', labelKey: 'modelReasoningLevelMedium' as const },
+  { level: 'high', labelKey: 'modelReasoningLevelHigh' as const },
+]
+
+type ReasoningLevel = (typeof REASONING_LEVELS)[number]['level']
+
+/** The value a row's level toggles store: off, or the declared map. */
+export type ReasoningEffortsDraft = false | Record<string, string | null>
+
+/** The levels a row currently declares as on; an absent or `false` value is none. */
+function declaredLevels(model: ModelDraft): Set<ReasoningLevel> {
+  const efforts = model.reasoningEfforts as ReasoningEffortsDraft | undefined
+  if (efforts === false || typeof efforts !== 'object' || efforts === null) return new Set()
+  return new Set(
+    REASONING_LEVELS.filter(({ level }) => typeof efforts[level] === 'string').map(({ level }) => level),
+  )
+}
+
+/**
  * Render the model list with its fetch action.
  * @param props - the drafted rows, probe target, wire face, and copy.
  * @returns the model-list editor.
@@ -209,7 +242,7 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
     })
   }
 
-  const patch = (index: number, next: Record<string, string | number | undefined>): void => {
+  const patch = (index: number, next: Record<string, string | number | boolean | ReasoningEffortsDraft | undefined>): void => {
     onChange(models.map((model, at) => {
       if (at !== index) return model
       // Rebuilt rather than spread over: an emptied optional field has to leave
@@ -224,6 +257,31 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
         Object.entries({ ...model, ...next }).filter(([key]) => !cleared.has(key)),
       )
     }))
+  }
+
+  /**
+   * Toggle one thinking-intensity level on a row's draft. Before the user
+   * interacts a row carries no `reasoningEfforts` at all — catalog-inherited
+   * models keep their declared behavior untouched. Checking the first level
+   * writes `{ off: null, <level>: <level> }`; checking more appends; unchecking
+   * the last level writes `false` (the model does not think); `off` survives as
+   * the always-null "supported, send nothing" entry until the row is cleared.
+   */
+  const toggleLevel = (index: number, level: ReasoningLevel, on: boolean): void => {
+    const model = models[index]
+    if (model === undefined) return
+    const current = declaredLevels(model)
+    const next = new Set(current)
+    if (on) next.add(level)
+    else next.delete(level)
+    if (next.size === 0) { patch(index, { reasoningEfforts: false }); return }
+    patch(index, {
+      reasoningEfforts: Object.fromEntries([
+        ['off', null] as const,
+        ...REASONING_LEVELS.filter(({ level: name }) => next.has(name))
+          .map(({ level: name }) => [name, name] as const),
+      ]),
+    })
   }
 
   const fetchModels = async (): Promise<void> => {
@@ -434,6 +492,23 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
                     onChange={(event) => { editCapacity(index, 'maxTokens', event.target.value) }}
                   />
                 </label>
+                <fieldset className={styles['modelLevels']} disabled={disabled}>
+                  <legend className={styles['modelFieldLabel']}>{t('modelReasoningEfforts')}</legend>
+                  <div className={styles['modelLevelRow']}>
+                    {REASONING_LEVELS.map(({ level, labelKey }) => (
+                      <label key={level} className={styles['modelLevel']}>
+                        <input
+                          type="checkbox"
+                          checked={declaredLevels(model).has(level)}
+                          aria-label={`${t('modelReasoningEfforts')} ${level} ${index + 1}`}
+                          onChange={(event) => { toggleLevel(index, level, event.target.checked) }}
+                        />
+                        <span>{t(labelKey)}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <span className={styles['modelLevelHint']}>{t('modelReasoningEffortsHint')}</span>
+                </fieldset>
               </div>
             )
             : null}

@@ -25,6 +25,17 @@ export const textEvents = [
   '[DONE]',
 ]
 
+/**
+ * The same generation, but every chunk carries a null finish_reason and the
+ * stream ends on `[DONE]` — the shape a gateway that never emits a
+ * finish_reason chunk deterministically produces.
+ */
+export const noFinishReasonEvents = [
+  '{"choices":[{"delta":{"role":"assistant","content":""},"index":0,"finish_reason":null}]}',
+  '{"choices":[{"delta":{"content":"hello"},"index":0,"finish_reason":null}]}',
+  '[DONE]',
+]
+
 /** Local provider stand-in: replays scripted behaviors per request. */
 export async function mockServer(script: {
   status?: number
