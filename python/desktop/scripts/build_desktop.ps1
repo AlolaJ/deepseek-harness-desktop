@@ -8,9 +8,10 @@
 
     stage 0  ensure venv + pyinstaller/pillow
     stage 1  preflight repo build   (apps/cli/lib/bin.js + apps/web/dist) else pnpm run build:official
-                                     (re-runs when the recorded client profile is not official,
-                                      so the bundled UI carries the official brand, not the
-                                      local-build fallback)
+                                     (re-runs when the recorded client profile is not official or its
+                                      commit hash no longer matches HEAD — e.g. after a pull/merge —
+                                      so the bundled UI carries the official brand of the current tree,
+                                      not a local-build fallback or a stale official build)
     stage 2  closure deploy         pnpm --filter dsh-desktop-runtime deploy  -> .build/resources/cli
                                      (+ de-link the link:vendor/* reparse points into real copies
                                       + materialize link:-overridden vendor/{cosmokit,schemastery}
@@ -44,6 +45,12 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+# pnpm's verify-deps-before-run and its modules-purge confirmation abort without a
+# TTY ([ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY]), which kills every pnpm stage
+# here when the script runs from an automated shell after a pull/merge. CI=true
+# makes pnpm non-interactive for the whole pipeline instead of failing it.
+$env:CI = 'true'
 
 $ScriptDir    = $PSScriptRoot
 $DesktopRoot  = Split-Path -Parent $ScriptDir
@@ -366,14 +373,22 @@ $officialRecorded = $false
 if (Test-Path $buildRecord) {
   try {
     $record = Get-Content $buildRecord -Raw | ConvertFrom-Json
-    $officialRecorded = ($record.environment.'DSH_CLIENT_BUILD_PROFILE' -eq 'official')
+    $recordedHash = $record.environment.'DSH_CLIENT_COMMIT_HASH'
+    # A merge or pull moves source under an existing build: artifacts exist and the
+    # profile is still recorded as official, so the profile check alone would ship a
+    # stale closure. The record also stores the built commit; require it to prefix-match
+    # HEAD (short hashes, so prefix rather than equality).
+    $headHash = ''
+    try { $headHash = (git -C $RepoRoot rev-parse HEAD).Trim() } catch { $headHash = '' }
+    $commitCurrent = ($recordedHash -and $headHash -and $headHash.StartsWith($recordedHash))
+    $officialRecorded = ($record.environment.'DSH_CLIENT_BUILD_PROFILE' -eq 'official') -and $commitCurrent
   } catch { $officialRecorded = $false }
 }
 if ((Test-Path $cliBin) -and (Test-Path $webDist) -and $officialRecorded) {
-  Section 'preflight: workspace build present (official profile)'
+  Section 'preflight: workspace build present (official profile, current commit)'
 } else {
   if (-not $officialRecorded) {
-    Section 'preflight: official client profile not recorded -> pnpm run build:official'
+    Section 'preflight: official client profile not recorded or stale -> pnpm run build:official'
   } else {
     Section 'preflight: workspace build missing -> pnpm run build:official'
   }
