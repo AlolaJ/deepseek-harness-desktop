@@ -27,6 +27,8 @@ tmp/
 .idea
 mise.toml
 dist-exe/
+/dist/
+apps/desktop/.desktop-build/
 python/sdk-runtime/src/deepseek_harness_runtime/runtime/deepseek-harness-sdk-runtime-*
 python/sdk-runtime/src/deepseek_harness_runtime/runtime/node/
 python/**/__pycache__/
@@ -49,3 +51,4 @@ python/desktop/dist/
 
 # inno default output dir (early probe compiles)
 python/desktop/inno/Output/
+native/system/test/bin/
