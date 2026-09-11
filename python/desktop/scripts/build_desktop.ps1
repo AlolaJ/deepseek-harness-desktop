@@ -414,11 +414,44 @@ try {
     # dependencies of deploy-root/package.json (pnpm won't auto-install a
     # `workspace:`-protocol peer inside a deploy), and the link:-overridden
     # packages get materialized by Materialize-LinkOverrides below.
-    Invoke-Native {
-      & pnpm --filter dsh-desktop-runtime deploy --legacy --prod `
-           --config.node-linker=hoisted --config.auto-install-peers=true `
-           --config.link-workspace-packages=true $closure
-    }
+    #
+    # pnpm validates every workspace patch against the deploy closure's own
+    # dependency graph, and a patch whose target package is not reachable in it
+    # aborts the deploy with ERR_PNPM_UNUSED_PATCH (upstream added an
+    # @electron/osx-sign patch that only enters the tree through apps/desktop's
+    # electron-builder packaging devDependency, which is no part of this runtime
+    # closure). On that error, strip exactly the reported patches from
+    # pnpm-workspace.yaml for one retry and restore the file afterwards; the
+    # closure's own patches (node-pty, @yao-pkg/pkg) keep applying.
+    $workspaceYaml = Join-Path $RepoRoot 'pnpm-workspace.yaml'
+    $workspaceYamlOrig = [IO.File]::ReadAllText($workspaceYaml)
+    try {
+      $deployed = $false
+      for ($attempt = 1; $attempt -le 2 -and -not $deployed; $attempt++) {
+        # A failed attempt can leave partial content behind, and pnpm refuses a
+        # non-empty deploy path (ERR_PNPM_DEPLOY_DIR_NOT_EMPTY) — start clean.
+        if (Test-Path $closure) { Remove-Item -LiteralPath $closure -Recurse -Force }
+        $deployOutput = & pnpm --filter dsh-desktop-runtime deploy --legacy --prod `
+             --config.node-linker=hoisted --config.auto-install-peers=true `
+             --config.link-workspace-packages=true $closure 2>&1
+        $deployText = (($deployOutput | ForEach-Object { "$_" }) -join "`n")
+        $deployText | Write-Host
+        if ($LASTEXITCODE -eq 0) { $deployed = $true; break }
+        if ($attempt -eq 1 -and $deployText -match 'ERR_PNPM_UNUSED_PATCH\]\s*The following patches were not used:\s*(.+)') {
+          $unused = $Matches[1] -split ',\s*' | ForEach-Object { $_.Trim().Trim('`', '"', "'") } | Where-Object { $_ }
+          if (-not $unused) { throw "deploy failed (exit $LASTEXITCODE)`n$deployText" }
+          Write-Host "stripping patches unused by the closure and retrying: $($unused -join ', ')"
+          $stripped = $workspaceYamlOrig
+          foreach ($patch in $unused) {
+            $stripped = $stripped -replace "(?m)^\s+'?$([regex]::Escape($patch))'?\s*:.*\r?\n?", ''
+          }
+          if ($stripped -eq $workspaceYamlOrig) { throw "deploy failed; could not strip unused patches ($($unused -join ', '))`n$deployText" }
+          [IO.File]::WriteAllText($workspaceYaml, $stripped)
+        } else {
+          throw "deploy failed (exit $LASTEXITCODE)`n$deployText"
+        }
+      }
+    } finally { [IO.File]::WriteAllText($workspaceYaml, $workspaceYamlOrig) }
     if (-not (Test-Path (Join-Path $closure 'node_modules\@deepseek-ai\dsh\lib\bin.js'))) {
       throw 'deploy did not produce node_modules/@deepseek-ai/dsh/lib/bin.js'
     }
