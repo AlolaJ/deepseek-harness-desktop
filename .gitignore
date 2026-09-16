@@ -48,6 +48,7 @@ worktrees/
 python/desktop/.build/
 python/desktop/.venv/
 python/desktop/dist/
+python/desktop/dsh_shell/_version.py
 
 # inno default output dir (early probe compiles)
 python/desktop/inno/Output/

@@ -264,6 +264,9 @@ function Invoke-BootProbe([string]$ExePath, [string]$ProbeRoot, [string]$Label) 
   # but the probe drives it with WM_CLOSE and must get a real exit to assert
   # zero leftover processes.
   $env:DSH_DESKTOP_E2E_CLOSE_EXIT = '1'
+  # Belt-and-suspenders with the above (E2E_CLOSE_EXIT implies it): the boot
+  # probes must never touch the update-check network path.
+  $env:DSH_DESKTOP_UPDATE_DISABLE = '1'
 
   $out = Join-Path $ProbeRoot 'stdout.log'
   $err = Join-Path $ProbeRoot 'stderr.log'
@@ -483,6 +486,21 @@ if ((Get-Command node -ErrorAction SilentlyContinue)) {
   Write-Host "  node.exe $((Get-Item (Join-Path $ResDir 'node.exe')).Length) bytes"
   $ico = Get-Item (Join-Path $ResDir 'icon.ico') -ErrorAction SilentlyContinue
   Write-Host "  icon.ico $($ico.Length) bytes"
+}
+
+# -- stage 3.5: version stamp ---------------------------------------------------
+# Stamp the shell's version from apps/cli/package.json (the same file
+# build_installer.ps1 reads) into dsh_shell/_version.py — the single source of
+# truth the updater compares Gitee release tags against. Gitignored: dev
+# checkouts without a stamp fall back to 0.0.0-dev (auto-check off).
+$PkgJson = Join-Path $RepoRoot 'apps\cli\package.json'
+if (Test-Path $PkgJson) {
+  Section 'version stamp: dsh_shell/_version.py'
+  $Ver = ((Get-Content $PkgJson -Raw | ConvertFrom-Json).version)
+  if (-not $Ver) { throw 'apps/cli/package.json has no version' }
+  Set-Content -LiteralPath (Join-Path $DesktopRoot 'dsh_shell\_version.py') `
+    -Encoding ascii -Value ('__version__ = "' + $Ver + '"')
+  Write-Host "  stamped dsh_shell.__version__ = $Ver"
 }
 
 # -- stage 4: PyInstaller onedir -----------------------------------------------

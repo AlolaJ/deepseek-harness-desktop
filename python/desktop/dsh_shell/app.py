@@ -1,8 +1,10 @@
 """Desk shell orchestration: spawn the backend, embed its web UI, supervise.
 
-Performance design (deliberate, no bridge):
+Performance design (deliberate, near-no-bridge):
   * The web UI talks to the backend over localhost HTTP/WebSocket directly —
-    no pywebview js_api, no polling loop, no Python-side per-frame cost.
+    no polling loop, no Python-side per-frame cost. The one js_api object the
+    shell holds is the updater bridge (`update_ui.UpdateBridge`): the page
+    never talks to the backend through it.
   * `webview.start(debug=False)` runs the WebView2 production rendering path.
   * A persistent `WEBVIEW2_USER_DATA_FOLDER` keeps the HTTP index / asset /
     GPU shader cache across launches (biggest repeat-startup win).
@@ -17,6 +19,8 @@ import base64
 import ctypes
 import html as html_mod
 import os
+import threading
+import time
 from pathlib import Path
 
 import webview  # type: ignore
@@ -25,6 +29,8 @@ from . import config
 from . import tray as tray_mod
 from .backend import BackendSupervisor
 from .log import log
+from .update_ui import BOOTSTRAP_JS, UpdateBridge, push_state
+from .updater import Updater
 
 APP_NAME = "DeepSeek Harness"
 _WINDOW = (1280, 800)
@@ -198,12 +204,23 @@ def run() -> int:
 
     log("==> starting backend ...")
 
+    # ---- updater (the shell's only js_api bridge) --------------------------
+    # The page renders update state pushed from Python; the only traffic the
+    # other direction is update_check / update_choose / update_open_page.
+    # Probes never get here: config.updates_disabled() (E2E_CLOSE_EXIT or
+    # UPDATE_DISABLE) keeps Updater off the network, and dev shells opt out
+    # via auto_check_allowed() (see updater.py).
+    updater = Updater()
+    updater.cleanup_partials()
+    bridge = UpdateBridge()
+
     window = webview.create_window(
         APP_NAME,
         html=_splash_html(),
         width=_WINDOW[0],
         height=_WINDOW[1],
         min_size=_MIN_WINDOW,
+        js_api=bridge,
     )
 
     # pywebview 6.x has no icon= param on Windows — once the native window
@@ -241,32 +258,57 @@ def run() -> int:
     # probes drive the app with WM_CLOSE and need it to exit for their
     # zero-leftovers assertion.
     exiting = {"flag": False}
+    hidden_to_tray = {"flag": False}  # parked in the tray (balloon decisions)
 
     def _show_from_tray() -> None:
+        hidden_to_tray["flag"] = False
         try:
             window.show()
         except Exception as exc:  # noqa: BLE001 — best-effort
             log(f"==> show from tray failed: {exc}")
 
-    def _exit_from_tray() -> None:
+    def _request_exit(reason: str) -> None:
         if exiting["flag"]:
             return
         exiting["flag"] = True
-        log("==> tray: exit requested")
+        log(f"==> exit requested ({reason})")
         try:
             # destroy() marshals to the pywebview UI thread and runs the normal
             # close flow; on_closing sees the flag and lets the close proceed.
+            # For an update install this is also what releases the `Global\`
+            # mutex the installer's AppMutex check waits on: run()'s
+            # `finally: supervisor.stop()` joins the backend first.
             window.destroy()
         except Exception as exc:  # noqa: BLE001 — never leave an inert app
-            log(f"==> tray: window destroy failed, forcing exit: {exc}")
+            log(f"==> window destroy failed, forcing exit: {exc}")
             os._exit(1)
 
-    tray = tray_mod.create(config.tray_icon(), _show_from_tray, _exit_from_tray) if not config.close_exits() else None
+    def _exit_from_tray() -> None:
+        _request_exit("tray")
+
+    bridge.bind(window, updater, _request_exit, _show_from_tray)
+    updater.on_apply_exit = lambda: _request_exit("update install")
+    updater.on_state_change = lambda: push_state(window, updater.state())
+    updater.is_window_hidden = lambda: hidden_to_tray["flag"]
+
+    tray = (
+        tray_mod.create(
+            config.tray_icon(),
+            _show_from_tray,
+            _exit_from_tray,
+            on_check_update=lambda: bridge.update_check(True),
+        )
+        if not config.close_exits()
+        else None
+    )
+    if tray is not None:
+        updater.notify_balloon = tray.notify_balloon
 
     def _on_closing(**_kw) -> bool | None:
         if exiting["flag"] or config.close_exits():
             return None  # allow the close -> normal full shutdown
         # Cancel the close and park the app in the tray instead.
+        hidden_to_tray["flag"] = True
         try:
             window.hide()
         except Exception as exc:  # noqa: BLE001 — best-effort
@@ -277,6 +319,25 @@ def run() -> int:
 
     if tray is not None:
         window.events.closing += _on_closing
+
+    def _on_loaded(**_kw) -> None:
+        # Fires on EVERY navigation (splash, real UI, rebind). pywebview
+        # rebuilds window.pywebview each time, so the bootstrap must be
+        # re-injected and the live state re-pushed — that also heals any push
+        # dropped by a navigation race. Handlers run on the webview UI
+        # thread; dispatch the evaluate_js work to a short-lived daemon so we
+        # never block the event source.
+        def _inject() -> None:
+            try:
+                window.evaluate_js(BOOTSTRAP_JS)
+            except Exception as exc:  # noqa: BLE001 — race with the next nav
+                log(f"==> updater: bootstrap inject deferred: {exc}")
+                return
+            push_state(window, updater.state())
+
+        threading.Thread(target=_inject, daemon=True, name="dsh-update-inject").start()
+
+    window.events.loaded += _on_loaded
 
     def _boot() -> None:
         """webview.start(func) callback: once the UI thread is up, wait for the
@@ -308,6 +369,23 @@ def run() -> int:
             window.load_url(url)
         except Exception as exc:  # noqa: BLE001 — window may already be closing
             log(f"==> load_url failed: {exc}")
+            return
+
+        # One-shot startup update check (armed ONLY here — a rebind after a
+        # backend crash must not re-check). Settle a few seconds so the real
+        # UI is up and idle before the check lands its state push.
+        def _auto_check() -> None:
+            try:
+                time.sleep(3.0)
+                if updater.auto_check_allowed():
+                    log("==> updater: startup check")
+                    updater.check(manual=False)
+                else:
+                    log("==> updater: auto-check disabled in this context")
+            except Exception as exc:  # noqa: BLE001 — never break the shell
+                log(f"==> updater: auto-check failed: {exc}")
+
+        threading.Thread(target=_auto_check, daemon=True, name="dsh-update-auto").start()
 
     try:
         # debug=False is the production WebView2 path (GPU + optimized rendering).

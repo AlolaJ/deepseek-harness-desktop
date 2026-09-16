@@ -146,3 +146,23 @@ def app_mutex_name() -> str:
 def backend_cwd() -> Path:
     """Working directory for the spawned `dsh web`; must be writable by the user."""
     return user_data_dir() / "runtime"
+
+
+def settings_file() -> Path:
+    """User settings JSON (currently only update prefs; first persistent file)."""
+    return user_data_dir() / "settings.json"
+
+
+def updates_dir() -> Path:
+    """Where downloaded setup EXEs land (`user_data_dir()/updates`)."""
+    return user_data_dir() / "updates"
+
+
+def updates_disabled() -> bool:
+    """Kill switch for any update-check networking.
+
+    `DSH_DESKTOP_UPDATE_DISABLE=1` is the explicit probe switch;
+    `close_exits()` (E2E probe mode) implies it so probe boots never touch
+    the network — the boot probes must stay offline deterministically.
+    """
+    return os.environ.get("DSH_DESKTOP_UPDATE_DISABLE") == "1" or close_exits()

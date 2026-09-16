@@ -1,9 +1,10 @@
 """System-tray icon for the desktop shell (Windows only).
 
 pywebview 6.x has no tray support of its own, so the tray is a small WinForms
-``NotifyIcon`` + right-click menu (打开/Show + 退出/Exit) running on its own
-STA message-pump thread. All user actions funnel back to callbacks owned by
-``dsh_shell.app`` — the tray never touches app state directly.
+``NotifyIcon`` + right-click menu (打开/Show + 检查更新/Check for updates +
+退出/Exit) running on its own STA message-pump thread. All user actions funnel
+back to callbacks owned by ``dsh_shell.app`` — the tray never touches app
+state directly.
 
 Lifetime: the icon lives until the shell truly exits. When the app shuts down
 (the tray "退出/Exit" requested a real quit, or the E2E close path ran),
@@ -37,10 +38,12 @@ class Tray:
         icon_path: Path,
         on_show: Callable[[], None],
         on_exit: Callable[[], None],
+        on_check_update: Callable[[], None] | None = None,
     ) -> None:
         self._icon_path = str(icon_path)
         self._on_show = on_show
         self._on_exit = on_exit
+        self._on_check_update = on_check_update
         self._thread = None
         self._notify = None
 
@@ -101,10 +104,14 @@ class Tray:
         menu = WinForms.ContextMenuStrip()
         item_show = WinForms.ToolStripMenuItem("打开 DeepSeek Harness / Show")
         item_show.Click += self._menu_show
-        item_exit = WinForms.ToolStripMenuItem("退出 / Exit")
-        item_exit.Click += self._menu_exit
         menu.Items.Add(item_show)
         menu.Items.Add(WinForms.ToolStripSeparator())
+        if self._on_check_update is not None:
+            item_update = WinForms.ToolStripMenuItem("检查更新 / Check for updates")
+            item_update.Click += self._menu_check_update
+            menu.Items.Add(item_update)
+        item_exit = WinForms.ToolStripMenuItem("退出 / Exit")
+        item_exit.Click += self._menu_exit
         menu.Items.Add(item_exit)
         notify.ContextMenuStrip = menu
 
@@ -116,6 +123,9 @@ class Tray:
 
     def _menu_show(self, sender=None, event=None) -> None:  # noqa: ARG002
         self._dispatch(self._on_show)
+
+    def _menu_check_update(self, sender=None, event=None) -> None:  # noqa: ARG002
+        self._dispatch(self._on_check_update)
 
     def _menu_exit(self, sender=None, event=None) -> None:  # noqa: ARG002
         self._dispatch(self._on_exit)
@@ -158,11 +168,12 @@ def create(
     icon_path: Path,
     on_show: Callable[[], None],
     on_exit: Callable[[], None],
+    on_check_update: Callable[[], None] | None = None,
 ) -> "Tray | None":
     """Create and start the tray; returns None if unavailable so the caller
     keeps close-quits behaviour."""
     global _TRAY
-    tray = Tray(icon_path, on_show, on_exit)
+    tray = Tray(icon_path, on_show, on_exit, on_check_update)
     if not tray.start():
         return None
     _TRAY = tray  # keep alive for the process lifetime

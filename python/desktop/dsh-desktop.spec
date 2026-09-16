@@ -63,7 +63,7 @@ binaries += collect_dynamic_libs("pythonnet")
 # absolute import in __main__.py): if the entry import is ever made relative
 # again, modulegraph silently drops it and the frozen EXE loses the whole
 # package — pin it here so that regression can never break a build again.
-hiddenimports += ["dsh_shell", "dsh_shell.app", "dsh_shell.backend", "dsh_shell.config", "dsh_shell.log", "dsh_shell.tray"]
+hiddenimports += ["dsh_shell", "dsh_shell.app", "dsh_shell.backend", "dsh_shell.config", "dsh_shell.log", "dsh_shell.tray", "dsh_shell.updater", "dsh_shell.update_ui"]
 
 a = Analysis(
     [str(ROOT / "dsh_shell" / "__main__.py")],
