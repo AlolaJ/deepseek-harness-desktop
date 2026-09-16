@@ -134,13 +134,17 @@ function Invoke-InstalledBoot([string]$ExePath, [string]$DataDir, [string]$Label
 
   # The splash window appears BEFORE the backend finishes booting — wait for
   # the boot URL in shell.log so this probe actually proves the installed
-  # backend boots (closing early would kill it mid-boot).
+  # backend boots (closing early would kill it mid-boot). The shell mirrors
+  # every shell.log line to stderr (this probe's stderr.log), so accept either:
+  # a transient sharing violation once dropped the boot-URL line from
+  # shell.log alone while the app had booted fine.
   $log = Join-Path $DataDir 'shell.log'
   $booted = $false
   $urlDeadline = (Get-Date).AddSeconds(90)
   while ((Get-Date) -lt $urlDeadline) {
     $logText = Get-Content $log -Raw -ErrorAction SilentlyContinue
-    if ($logText -match 'backend URL: http://') { $booted = $true; break }
+    $errText = Get-Content $err -Raw -ErrorAction SilentlyContinue
+    if (($logText -match 'backend URL: http://') -or ($errText -match 'backend URL: http://')) { $booted = $true; break }
     Start-Sleep -Milliseconds 500
   }
   if (-not $booted) {

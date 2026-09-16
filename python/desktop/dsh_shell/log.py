@@ -35,7 +35,19 @@ def log(message: str) -> None:
     try:
         target = log_dir()
         target.mkdir(parents=True, exist_ok=True)
-        with open(target / "shell.log", "a", encoding="utf-8", errors="replace") as fh:
-            fh.write(line + "\n")
+        # Retry the append: an external reader (the build/installer probes poll
+        # this file every 500 ms, antivirus scans a just-written file) can hold
+        # the file for a moment and turn the open into a transient sharing
+        # violation. One dropped line once made the frozen-boot probe read a
+        # shell.log that never contained the boot URL it waits for.
+        for attempt in range(3):
+            try:
+                with open(target / "shell.log", "a", encoding="utf-8", errors="replace") as fh:
+                    fh.write(line + "\n")
+                break
+            except PermissionError:
+                if attempt == 2:
+                    raise
+                time.sleep(0.05)
     except Exception:  # noqa: BLE001
         pass
