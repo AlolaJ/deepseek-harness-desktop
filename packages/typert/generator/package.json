@@ -33,7 +33,7 @@
   "license": "MIT",
   "dependencies": {
     "@jridgewell/gen-mapping": "^0.3.13",
-    "typescript": "^6.0.3"
+    "typescript": "^7.0.2"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:^"

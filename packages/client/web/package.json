@@ -39,7 +39,7 @@
     "@deepseek-ai/cordis": "workspace:^",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "@deepseek-ai/dsh-host-webserver": "workspace:^"
   },
   "peerDependencies": {
