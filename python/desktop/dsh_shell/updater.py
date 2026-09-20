@@ -1,7 +1,7 @@
 r"""Update checking + silent self-update for the desktop shell.
 
-Source of truth: the Gitee Releases of the distribution fork
-(`alolaa/deepseek-harness-desktop`). Each release carries the Inno setup EXE
+Source of truth: the GitHub Releases of the distribution fork
+(`AlolaJ/deepseek-harness-desktop`). Each release carries the Inno setup EXE
 as an asset named `DeepSeekHarness-<version>-Setup.exe`; the checker compares
 the release tag against the shell's stamped version (`dsh_shell._version`,
 written by `build_desktop.ps1` from `apps/cli/package.json`).
@@ -20,7 +20,7 @@ Apply flow (consented in the UI, see update_ui.py):
 stdlib only (urllib) — the shell venv carries no HTTP client.
 
 Test hooks (also see config.updates_disabled):
-  DSH_DESKTOP_UPDATE_API_BASE    override the Gitee API base (fake server)
+  DSH_DESKTOP_UPDATE_API_BASE    override the GitHub API base (fake server)
   DSH_DESKTOP_UPDATE_REPO        override `owner/repo`
   DSH_DESKTOP_VERSION_OVERRIDE   override the current version
   DSH_DESKTOP_E2E_UPDATE_AUTO    auto-answer the update prompt (E2E probes)
@@ -136,7 +136,7 @@ def current_version() -> str:
     return _PKG_VERSION
 
 
-# ---- Gitee releases ---------------------------------------------------------
+# ---- GitHub releases --------------------------------------------------------
 
 
 @dataclass(frozen=True)
@@ -145,61 +145,71 @@ class ReleaseOffer:
     version: str
     asset_name: str
     asset_url: str
-    asset_size: int | None  # absent from some Gitee responses; download infers
+    asset_size: int | None  # absent from some responses; download infers
 
 
 def api_base() -> str:
-    return os.environ.get("DSH_DESKTOP_UPDATE_API_BASE") or "https://gitee.com/api/v5"
+    return os.environ.get("DSH_DESKTOP_UPDATE_API_BASE") or "https://api.github.com"
 
 
 def repo_slug() -> str:
-    return os.environ.get("DSH_DESKTOP_UPDATE_REPO") or "alolaa/deepseek-harness-desktop"
+    return os.environ.get("DSH_DESKTOP_UPDATE_REPO") or "AlolaJ/deepseek-harness-desktop"
 
 
 def release_page_url(tag: str | None = None) -> str:
     """Human-facing releases page (browser fallback when the app can't update)."""
-    base = f"https://gitee.com/{repo_slug().strip('/')}/releases"
-    return f"{base}/{tag}" if tag else base
+    base = f"https://github.com/{repo_slug().strip('/')}/releases"
+    return f"{base}/tag/{tag}" if tag else base
 
 
-def check_gitee(timeout: float = 10.0) -> ReleaseOffer:
-    """Ask the Gitee API for the latest release and its setup EXE asset.
+def check_github(timeout: float = 10.0) -> ReleaseOffer:
+    """Ask the GitHub API for the latest release and its setup EXE asset.
 
-    `/releases/latest` includes prereleases — which is what we want, the whole
-    version line is alpha/rc. Raises UpdateError with a one-line reason.
+    `/releases/latest` excludes prereleases, so for an alpha/rc version line we
+    list all releases and pick the newest by `is_newer`. Raises UpdateError
+    with a one-line reason.
     """
-    url = f"{api_base().rstrip('/')}/repos/{repo_slug().strip('/')}/releases/latest"
+    slug = repo_slug().strip("/")
     request = urllib.request.Request(
-        url, headers={"User-Agent": _UA, "Accept": "application/json"}
+        f"{api_base().rstrip('/')}/repos/{slug}/releases",
+        headers={"User-Agent": _UA, "Accept": "application/json"},
     )
     try:
         with urllib.request.urlopen(request, timeout=timeout) as resp:
             body = resp.read()
     except urllib.error.HTTPError as exc:
-        raise UpdateError(f"Gitee HTTP {exc.code}") from exc
+        raise UpdateError(f"GitHub HTTP {exc.code}") from exc
     except (urllib.error.URLError, OSError, TimeoutError) as exc:
-        raise UpdateError(f"Gitee unreachable: {exc}") from exc
+        raise UpdateError(f"GitHub unreachable: {exc}") from exc
     try:
-        payload = json.loads(body.decode("utf-8", "replace"))
-        tag = str(payload["tag_name"]).strip()
-        assets = payload.get("assets") or []
+        releases = json.loads(body.decode("utf-8", "replace"))
     except Exception as exc:
-        raise UpdateError("Gitee returned an unreadable response") from exc
-    if not tag:
-        raise UpdateError("latest release has no tag_name")
-    for asset in assets:
-        name = str(asset.get("name") or "")
-        download = str(asset.get("browser_download_url") or "")
-        if _ASSET_RE.match(name) and download:
-            size = asset.get("size")
-            return ReleaseOffer(
-                tag=tag,
-                version=normalize_tag(tag),
-                asset_name=name,
-                asset_url=download,
-                asset_size=int(size) if isinstance(size, (int, float)) and size > 0 else None,
-            )
-    raise UpdateError("latest release has no DeepSeekHarness-*-Setup.exe asset")
+        raise UpdateError("GitHub returned an unreadable response") from exc
+    if not isinstance(releases, list) or not releases:
+        raise UpdateError("no releases found")
+    best: ReleaseOffer | None = None
+    for rel in releases:
+        tag = str(rel.get("tag_name") or "").strip()
+        if not tag:
+            continue
+        for asset in rel.get("assets") or []:
+            name = str(asset.get("name") or "")
+            download = str(asset.get("browser_download_url") or "")
+            if _ASSET_RE.match(name) and download:
+                size = asset.get("size")
+                offer = ReleaseOffer(
+                    tag=tag,
+                    version=normalize_tag(tag),
+                    asset_name=name,
+                    asset_url=download,
+                    asset_size=int(size) if isinstance(size, (int, float)) and size > 0 else None,
+                )
+                if best is None or is_newer(offer.version, best.version):
+                    best = offer
+                break  # one matching asset per release
+    if best is None:
+        raise UpdateError("no DeepSeekHarness-*-Setup.exe asset in any release")
+    return best
 
 
 # ---- settings persistence (first file the shell writes besides shell.log) ----
@@ -263,7 +273,7 @@ def download_release(
 ) -> Path:
     """Stream the setup EXE into `dest_dir` (`.part` then `os.replace`).
 
-    No resume: Gitee's CDN redirect target may not honour Range; an aborted
+    No resume: GitHub's CDN redirect target may not honour Range; an aborted
     download leaves a `.part` that cleanup_partials() sweeps at next launch.
     """
     dest_dir.mkdir(parents=True, exist_ok=True)
@@ -475,7 +485,7 @@ class Updater:
 
     def _check_worker(self, manual: bool) -> None:
         try:
-            offer = check_gitee()
+            offer = check_github()
         except UpdateError as exc:
             log(f"==> updater: check failed: {exc}")
             with self._lock:
