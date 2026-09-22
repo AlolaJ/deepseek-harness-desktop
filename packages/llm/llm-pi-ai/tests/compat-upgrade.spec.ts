@@ -55,19 +55,7 @@ describe('pi-ai gateway compatibility declarations', () => {
       .toThrow(/which is not configurable here/)
   })
 
-  // This fork defaults `supportsFinishReason` off for an unconfigured
-  // openai-completions model, so the resolved compat is never empty on that
-  // protocol: many OpenAI-compatible gateways end on `[DONE]` without a
-  // `finish_reason` chunk, and pi-ai otherwise throws "Stream ended without
-  // finish_reason" on a deterministic shape (see the agent note
-  // 2026-09-03-pi-ai-compat-stream-finish-default). Every OTHER field stays
-  // absent unless configured, and the protocols that do not take the switch
-  // resolve to no compat at all.
   it('keeps generic additions absent unless configured', () => {
-    expect(resolved({})).toEqual({ supportsFinishReason: false })
-  })
-
-  it.each(['openai-responses', 'anthropic-messages'])('keeps %s compat absent unless configured', (api) => {
-    expect(resolved({}, api)).toBeUndefined()
+    expect(resolved({})).toBeUndefined()
   })
 })

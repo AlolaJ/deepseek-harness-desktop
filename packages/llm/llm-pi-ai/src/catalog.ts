@@ -786,20 +786,6 @@ function resolveModelCompat(
     }
     configured[field] = value
   }
-  // A catalog-unknown (or protocol-repointed) openai-completions model, when
-  // neither route nor entry configured stream shape, trusts a clean end of
-  // the stream as the completion signal: many OpenAI-compatible gateways end
-  // with `[DONE]` and never emit a `finish_reason` chunk, and pi-ai would
-  // otherwise throw "Stream ended without finish_reason" on that
-  // deterministic case. A genuine mid-stream drop still raises an SDK error
-  // and reaches the transport-retry path. This mirrors the official
-  // adapter's own leniency across the seam (translate.ts treats a missing
-  // finish reason as `stop`). A configured value always wins.
-  if (api === 'openai-completions'
-    && (base === undefined || base.api !== api)
-    && configured.supportsFinishReason === undefined) {
-    configured.supportsFinishReason = false
-  }
   if (Object.keys(configured).length === 0) return {}
   // The installed entry's compat matches the entry's OWN api — a route-level
   // `api` repoint (an anthropic catalog served through an OpenAI-compatible
