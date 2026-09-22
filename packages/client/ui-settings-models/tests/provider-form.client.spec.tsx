@@ -1707,7 +1707,7 @@ describe('reasoningEfforts validation', () => {
     expect(validateDeepSeekModels(row(false))).toBeUndefined()
     expect(validateDeepSeekModels(row({ off: null, minimal: 'minimal' }))).toBeUndefined()
     expect(validateDeepSeekModels(row({ off: null, low: 'low', high: 'high' }))).toBeUndefined()
-    // Levels outside the settings UI's four are still legal profile values.
+    // Every level the schema tracks is legal here, including xhigh and max.
     expect(validateDeepSeekModels(row({ off: null, xhigh: 'xhigh' }))).toBeUndefined()
     // `off` may carry a wire spelling of its own; only a non-off level forces one.
     expect(validateDeepSeekModels(row({ off: 'none', low: 'low' }))).toBeUndefined()

@@ -11,8 +11,8 @@ import styles from './ModelsSection.module.css'
  *
  * Mirrors `THINKING_LEVELS` in packages/llm/llm-pi-ai/src/catalog.ts, which
  * is the schema's source of truth; the settings surface deliberately does not
- * depend on the adapter package, so the couple of levels it offers are spelled
- * here. `off` is never offered as a checkbox: every declared dict carries it as
+ * depend on the adapter package, so the levels it offers are spelled here.
+ * `off` is never offered as a checkbox: every declared dict carries it as
  * the valueless "support thinking, send nothing" entry (`{ off: null, … }`),
  * so unchecking every level writes `reasoningEfforts: false` — "this model
  * does not think" — and checking any level rewrites the dict including `off`.
@@ -22,6 +22,8 @@ const REASONING_LEVELS = [
   { level: 'low', labelKey: 'modelReasoningLevelLow' as const },
   { level: 'medium', labelKey: 'modelReasoningLevelMedium' as const },
   { level: 'high', labelKey: 'modelReasoningLevelHigh' as const },
+  { level: 'xhigh', labelKey: 'modelReasoningLevelXhigh' as const },
+  { level: 'max', labelKey: 'modelReasoningLevelMax' as const },
 ]
 
 /** One offered thinking level, spelled as dispatch sends it. */

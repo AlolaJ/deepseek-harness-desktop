@@ -226,7 +226,7 @@ pi-ai 事件变成 harness 的推理、文本、工具调用、用量与 finish 
 - **模态声明不受校验**——声明 `image` 而其网关不支持的模型会在提示词准入后被提供方拒绝。持久图片仍留在历史中，同一误声明模型可能再次失败；切换到纯文本模型仍然可行，因为共享 LLM 运行时会针对该请求把图片引用投影为稳定文本。
 - **未认证路由取决于其协议**——不点名凭据的路由解析为已配置但无密钥，但 pi-ai 的 OpenAI 兼容实现仍要求 API 密钥或 `Authorization` 标头，因此无密钥本地服务器需要由 `apiKeyEnv` 引用或 `headers` 中的 `Authorization` 条目提供的占位凭据。
 - **不支持 `GenerateOptions.stop`**——pi-ai 的通用流式选项无法跨提供方保证停止序列行为。
-- **设置界面仅提供四个思考档位，而非完整 profile 词表**——模型行的思考强度复选框覆盖 minimal/low/medium/high；`xhigh` 与 `max` 仍只能通过 settings.yaml 配置。勾选任意档位会按这四个档位重写该行的 `reasoningEfforts` 字典，因此手工声明的 `xhigh`/`max` 条目会在下一次对该行的界面编辑中被丢弃。
+- **设置界面提供完整的思考档位词表**——模型行的思考强度复选框覆盖 minimal/low/medium/high/xhigh/max，与 `catalog.ts` 中的 `THINKING_LEVELS` 一致。`off` 永不作为复选框：每个已声明字典都把它作为无值的"支持思考、不发送"条目携带。勾选任意档位会按所提供的档位重写该行的 `reasoningEfforts` 字典，因此手工声明的条目会在下一次对该行的界面编辑中被保留。
 - **只有历史中首条 `system` 消息会成为 pi-ai 的 `systemPrompt`**——pi-ai 只有一个系统槽位，因此后续的 `system` 消息，或在同时设置了 `GenerateOptions.system` 时的首条消息，会在原位置折叠为 `user` 消息；系统提示词的提供方专属放置遵循 pi-ai，而非 harness 自有的协议覆盖。system 或 assistant 历史中的图片（包括首条系统消息中的图片）在两条转换路径上都会以 `UNSUPPORTED_CONTENT` 失败。
 - **提供方 HTTP 状态不可用**——pi-ai 错误事件不跨提供方暴露稳定 HTTP 状态。
 - **重试策略由提供方自有，而非 SDK 重试**——pi-ai SDK 重试保持禁用，因此持久 agent（智能体）步骤与 `llm/retry` 事件拥有每个可见尝试，直接 `ctx.llm.stream()` 调用仍是单次尝试。
